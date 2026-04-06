@@ -459,11 +459,40 @@
             margin-top: 8px;
             cursor: pointer;
             transition: var(--transition);
+            display: block;
+            min-width: 180px;
+            min-height: 120px;
+            object-fit: cover;
         }
 
         .message-image:hover {
             transform: scale(1.02);
             filter: brightness(1.1);
+        }
+
+        .message-image.loading {
+            filter: blur(12px) brightness(0.8);
+            transform: scale(1.01);
+        }
+
+        .message-image-wrapper {
+            position: relative;
+            margin-top: 8px;
+            border-radius: 12px;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .image-status {
+            position: absolute;
+            inset: auto 10px 10px 10px;
+            padding: 7px 10px;
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.55);
+            color: var(--text-white);
+            font-size: 11px;
+            text-align: center;
+            backdrop-filter: blur(10px);
         }
 
         .message-file {
@@ -1264,10 +1293,12 @@
         let currentConversationID = null;
         let conversations = {};
         let messageUnsubscribe = null;
+        let conversationsUnsubscribe = null;
         let selectedMessageContext = null;
         let pushToken = null;
         let serviceWorkerRegistration = null;
         let notifiedMessageIds = new Set();
+        let pendingMediaMessages = [];
 
         // ==================== FUNÇÕES UTILITÁRIAS ====================
         
@@ -1420,6 +1451,11 @@
                 messageUnsubscribe = null;
             }
 
+            if (conversationsUnsubscribe && !currentUserID) {
+                conversationsUnsubscribe();
+                conversationsUnsubscribe = null;
+            }
+
             document.getElementById('chatHeader').style.display = 'none';
             document.getElementById('messagesContainer').style.display = 'none';
             document.getElementById('inputArea').style.display = 'none';
@@ -1433,6 +1469,7 @@
 
         async function getConversationByUsers(otherUserID) {
             const conversationKey = getConversationKey(currentUserID, otherUserID);
+            currentConversationID = conversationID;
             const conversationsRef = db.collection('conversations');
             const convQuery = await conversationsRef
                 .where('conversationKey', '==', conversationKey)
@@ -1708,6 +1745,97 @@
             document.getElementById('attachmentMenu').classList.toggle('active');
         }
 
+        function addPendingMediaMessage(file) {
+            const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            const previewUrl = URL.createObjectURL(file);
+
+            pendingMediaMessages.push({
+                tempId,
+                conversationID: currentConversationID,
+                sender: currentUserID,
+                type: file.type.startsWith('image/') ? 'image' : 'file',
+                previewUrl,
+                fileName: file.name,
+                status: 'Enviando...',
+                progress: 0,
+                timestamp: new Date()
+            });
+
+            renderPendingMediaMessages();
+            return tempId;
+        }
+
+        function updatePendingMediaMessage(tempId, updates) {
+            pendingMediaMessages = pendingMediaMessages.map(item =>
+                item.tempId === tempId ? { ...item, ...updates } : item
+            );
+            renderPendingMediaMessages();
+        }
+
+        function removePendingMediaMessage(tempId) {
+            const match = pendingMediaMessages.find(item => item.tempId === tempId);
+            if (match?.previewUrl) {
+                URL.revokeObjectURL(match.previewUrl);
+            }
+
+            pendingMediaMessages = pendingMediaMessages.filter(item => item.tempId !== tempId);
+            renderPendingMediaMessages();
+        }
+
+        function renderPendingMediaMessages() {
+            const container = document.getElementById('messagesContainer');
+            if (!container || !currentConversationID) return;
+
+            container.querySelectorAll('.pending-message').forEach(node => node.remove());
+
+            pendingMediaMessages
+                .filter(item => item.conversationID === currentConversationID)
+                .forEach(item => {
+                    const msgGroup = document.createElement('div');
+                    msgGroup.className = 'message-group sent pending-message';
+
+                    const bubble = document.createElement('div');
+                    bubble.className = 'message-bubble sent';
+
+                    if (item.type === 'image') {
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'message-image-wrapper';
+
+                        const img = document.createElement('img');
+                        img.src = item.previewUrl;
+                        img.className = 'message-image loading';
+                        wrapper.appendChild(img);
+
+                        const status = document.createElement('div');
+                        status.className = 'image-status';
+                        status.textContent = item.progress > 0
+                            ? `${item.status} ${item.progress}%`
+                            : item.status;
+                        wrapper.appendChild(status);
+                        bubble.appendChild(wrapper);
+                    } else {
+                        const fileDiv = document.createElement('div');
+                        fileDiv.className = 'message-file';
+                        fileDiv.innerHTML = `
+                            <i data-lucide="file" class="file-icon"></i>
+                            <div class="file-name">${item.fileName}</div>
+                        `;
+                        bubble.appendChild(fileDiv);
+                    }
+
+                    const timestamp = document.createElement('div');
+                    timestamp.className = 'message-timestamp';
+                    timestamp.textContent = item.status;
+
+                    msgGroup.appendChild(bubble);
+                    msgGroup.appendChild(timestamp);
+                    container.appendChild(msgGroup);
+                });
+
+            lucide.createIcons();
+            container.scrollTop = container.scrollHeight;
+        }
+
         // ==================== AUTENTICAÇÃO ====================
 
         /**
@@ -1852,56 +1980,70 @@
         /**
          * Carrega todas as conversas do usuário
          */
-        async function loadConversations() {
+        function loadConversations() {
             try {
+                if (conversationsUnsubscribe) {
+                    conversationsUnsubscribe();
+                    conversationsUnsubscribe = null;
+                }
+
                 const conversationsRef = db.collection('conversations');
-                const userConversations = await conversationsRef
+                conversationsUnsubscribe = conversationsRef
                     .where('participants', 'array-contains', currentUserID)
-                    .get();
-                const sortedConversations = userConversations.docs.sort((a, b) => {
-                    const aTime = a.data().lastMessageTime?.toMillis?.() || 0;
-                    const bTime = b.data().lastMessageTime?.toMillis?.() || 0;
-                    return bTime - aTime;
-                });
-
-                const convList = document.getElementById('conversationsList');
-                convList.innerHTML = '';
-
-                if (userConversations.empty) {
-                    convList.innerHTML = `
-                        <div class="empty-state">
-                            <i data-lucide="message-circle" class="empty-state-icon"></i>
-                            <p class="empty-state-text">Nenhuma conversa iniciada ainda</p>
-                        </div>
-                    `;
-                    return;
-                }
-
-                for (const doc of sortedConversations) {
-                    const convData = doc.data();
-                    const otherUserID = convData.participants.find(id => id !== currentUserID);
-                    
-                    // Busca info do outro usuário
-                    const otherUserData = await db.collection('users')
-                        .where('userID', '==', otherUserID)
-                        .get();
-
-                    if (!otherUserData.empty) {
-                        const otherUser = otherUserData.docs[0].data();
-                        const convItem = document.createElement('div');
-                        convItem.className = 'conversation-item';
-                        convItem.dataset.conversationId = doc.id;
-                        convItem.innerHTML = `
-                            <div class="conversation-name">${otherUser.username}</div>
-                            <div class="conversation-id">ID: ${otherUserID}</div>
-                        `;
-                        convItem.addEventListener('click', () => {
-                            selectConversation(doc.id, otherUserID, otherUser.username);
+                    .onSnapshot(async (snapshot) => {
+                        const sortedConversations = snapshot.docs.sort((a, b) => {
+                            const aTime = a.data().lastMessageTime?.toMillis?.() || 0;
+                            const bTime = b.data().lastMessageTime?.toMillis?.() || 0;
+                            return bTime - aTime;
                         });
-                        convList.appendChild(convItem);
-                    }
-                }
-                lucide.createIcons();
+
+                        const convList = document.getElementById('conversationsList');
+                        convList.innerHTML = '';
+
+                        if (snapshot.empty) {
+                            convList.innerHTML = `
+                                <div class="empty-state">
+                                    <i data-lucide="message-circle" class="empty-state-icon"></i>
+                                    <p class="empty-state-text">Nenhuma conversa iniciada ainda</p>
+                                </div>
+                            `;
+                            lucide.createIcons();
+                            return;
+                        }
+
+                        for (const doc of sortedConversations) {
+                            const convData = doc.data();
+                            const otherUserID = convData.participants.find(id => id !== currentUserID);
+                            const otherUserData = await db.collection('users')
+                                .where('userID', '==', otherUserID)
+                                .limit(1)
+                                .get();
+
+                            if (!otherUserData.empty) {
+                                const otherUser = otherUserData.docs[0].data();
+                                const convItem = document.createElement('div');
+                                convItem.className = 'conversation-item';
+                                convItem.dataset.conversationId = doc.id;
+                                convItem.innerHTML = `
+                                    <div class="conversation-name">${otherUser.username}</div>
+                                    <div class="conversation-id">ID: ${otherUserID}</div>
+                                `;
+                                convItem.addEventListener('click', () => {
+                                    selectConversation(doc.id, otherUserID, otherUser.username);
+                                });
+
+                                if (currentConversationID === doc.id) {
+                                    convItem.classList.add('active');
+                                }
+
+                                convList.appendChild(convItem);
+                            }
+                        }
+
+                        lucide.createIcons();
+                    }, (error) => {
+                        console.error('Erro ao carregar conversas:', error);
+                    });
             } catch (error) {
                 console.error('Erro ao carregar conversas:', error);
             }
@@ -2027,11 +2169,29 @@
                                 });
                             }
                         } else if (msg.type === 'image') {
+                            const wrapper = document.createElement('div');
+                            wrapper.className = 'message-image-wrapper';
+
                             const img = document.createElement('img');
                             img.src = msg.url;
-                            img.className = 'message-image';
+                            img.className = 'message-image loading';
+
+                            const status = document.createElement('div');
+                            status.className = 'image-status';
+                            status.textContent = 'Baixando imagem...';
+
+                            img.addEventListener('load', () => {
+                                img.classList.remove('loading');
+                                status.remove();
+                            });
+                            img.addEventListener('error', () => {
+                                status.textContent = 'Erro ao carregar imagem';
+                            });
                             img.addEventListener('click', () => openImageModal(msg.url));
-                            bubble.appendChild(img);
+
+                            wrapper.appendChild(img);
+                            wrapper.appendChild(status);
+                            bubble.appendChild(wrapper);
                         } else if (msg.type === 'file') {
                             const fileDiv = document.createElement('div');
                             fileDiv.className = 'message-file';
@@ -2070,6 +2230,7 @@
                         lucide.createIcons();
                     }
 
+                    renderPendingMediaMessages();
                     // Scroll para última mensagem
                     messagesContainer.scrollTop = messagesContainer.scrollHeight;
                 });
@@ -2134,6 +2295,7 @@
             
             // Mostra loading
             showToast('Enviando arquivo...', 'info');
+            const tempId = addPendingMediaMessage(file);
 
             try {
                 const storageRef = storage.ref();
@@ -2141,7 +2303,22 @@
                     `chats/${currentUserID}_${currentChatUserID}/${Date.now()}_${file.name}`
                 );
 
-                await fileRef.put(file);
+                const uploadTask = fileRef.put(file);
+                await new Promise((resolve, reject) => {
+                    uploadTask.on(
+                        'state_changed',
+                        (snapshot) => {
+                            const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                            updatePendingMediaMessage(tempId, {
+                                progress,
+                                status: progress >= 100 ? 'Processando...' : 'Enviando...'
+                            });
+                        },
+                        (error) => reject(error),
+                        () => resolve()
+                    );
+                });
+
                 const downloadURL = await fileRef.getDownloadURL();
 
                 // Determine tipo
@@ -2166,8 +2343,10 @@
                     lastMessageTime: new Date()
                 });
 
+                removePendingMediaMessage(tempId);
                 showToast('Arquivo enviado!', 'success');
             } catch (error) {
+                removePendingMediaMessage(tempId);
                 console.error('Erro ao enviar arquivo:', error);
                 showToast('Erro ao enviar arquivo', 'error');
             }
