@@ -505,6 +505,16 @@
             margin-top: 8px;
         }
 
+        .message-audio {
+            margin-top: 8px;
+            min-width: 220px;
+        }
+
+        .message-audio audio {
+            width: 100%;
+            height: 42px;
+        }
+
         .file-icon {
             width: 24px;
             height: 24px;
@@ -657,6 +667,53 @@
         .send-button:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 20px rgba(255, 255, 255, 0.3);
+        }
+
+        .record-button.recording {
+            background: linear-gradient(135deg, #ff6b6b, #ff3b30);
+            color: #fff;
+            box-shadow: 0 0 0 6px rgba(255, 59, 48, 0.16);
+            animation: pulseRecord 1s ease-in-out infinite;
+        }
+
+        .recording-indicator {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: calc(100% + 12px);
+            display: none;
+            align-items: center;
+            gap: 8px;
+            background: rgba(15, 15, 15, 0.96);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 999px;
+            padding: 8px 12px;
+            color: var(--text-white);
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .recording-indicator.active {
+            display: flex;
+        }
+
+        .recording-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ff3b30;
+            animation: pulseRecord 1s ease-in-out infinite;
+        }
+
+        @keyframes pulseRecord {
+            0%, 100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.6;
+                transform: scale(0.92);
+            }
         }
 
         .send-button:active {
@@ -1222,7 +1279,13 @@
         <button class="attachment-option" id="cameraButton" title="Tirar foto"> <i data-lucide="camera"></i> <span>Camera</span> </button>
        </div>
       </div><textarea class="message-input" id="messageInput" placeholder="Digite sua mensagem..." rows="1"></textarea>
-     </div><button class="send-button" id="sendButton" title="Enviar"> <i data-lucide="send" style="width: 18px; height: 18px;"></i> </button>
+     </div>
+     <div class="recording-indicator" id="recordingIndicator">
+      <span class="recording-dot"></span>
+      <span id="recordingStatusText">Gravando audio...</span>
+     </div>
+     <button class="icon-button record-button" id="recordButton" title="Segure para gravar"> <i data-lucide="mic" style="width: 18px; height: 18px;"></i> </button>
+     <button class="send-button" id="sendButton" title="Enviar"> <i data-lucide="send" style="width: 18px; height: 18px;"></i> </button>
     </div>
     <div id="noChatSelected" style="display: none;">
      <div class="empty-state">
@@ -1256,6 +1319,18 @@
      <button class="action-sheet-button danger" id="deleteMessageButton"> <i data-lucide="trash-2"></i> Apagar </button>
      <button class="action-sheet-button" id="editMessageButton"> <i data-lucide="pencil"></i> Editar </button>
      <button class="action-sheet-button" id="forwardMessageButton"> <i data-lucide="forward"></i> Encaminhar </button>
+    </div>
+   </div>
+  </div>
+  <div class="modal-overlay" id="conversationActionModal">
+   <div class="action-sheet">
+    <div class="action-sheet-title">
+     AÃ§Ãµes da conversa
+    </div>
+    <div class="action-sheet-list">
+     <button class="action-sheet-button" id="clearConversationButton"> <i data-lucide="eraser"></i> Limpar mensagens </button>
+     <button class="action-sheet-button" id="toggleBlockConversationButton"> <i data-lucide="ban"></i> Bloquear usuÃ¡rio </button>
+     <button class="action-sheet-button danger" id="deleteConversationButton"> <i data-lucide="trash-2"></i> Apagar conversa </button>
     </div>
    </div>
   </div><!-- TOAST CONTAINER -->
@@ -1294,11 +1369,19 @@
         let conversations = {};
         let messageUnsubscribe = null;
         let conversationsUnsubscribe = null;
+        let conversationStateUnsubscribe = null;
         let selectedMessageContext = null;
+        let selectedConversationContext = null;
         let pushToken = null;
         let serviceWorkerRegistration = null;
         let notifiedMessageIds = new Set();
         let pendingMediaMessages = [];
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let recordingStream = null;
+        let isRecordingAudio = false;
+        let recordStartTime = 0;
+        let currentConversationState = null;
 
         // ==================== FUNÇÕES UTILITÁRIAS ====================
         
@@ -1444,11 +1527,17 @@
             currentChatUserID = null;
             currentConversationID = null;
             currentConversationKey = null;
+            currentConversationState = null;
             notifiedMessageIds = new Set();
 
             if (messageUnsubscribe) {
                 messageUnsubscribe();
                 messageUnsubscribe = null;
+            }
+
+            if (conversationStateUnsubscribe) {
+                conversationStateUnsubscribe();
+                conversationStateUnsubscribe = null;
             }
 
             if (conversationsUnsubscribe && !currentUserID) {
@@ -1467,18 +1556,66 @@
             handleViewportLayout();
         }
 
+        function applyConversationState(conversationData) {
+            currentConversationState = conversationData || null;
+
+            const input = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendButton');
+            const recordButton = document.getElementById('recordButton');
+            const plusButton = document.getElementById('plusButton');
+
+            const blockedBy = Array.isArray(conversationData?.blockedBy) ? conversationData.blockedBy : [];
+            const isBlockedByMe = blockedBy.includes(currentUserID);
+            const isBlockedByOther = blockedBy.includes(currentChatUserID);
+            const isBlocked = isBlockedByMe || isBlockedByOther;
+
+            input.disabled = isBlocked;
+            sendButton.disabled = isBlocked;
+            recordButton.disabled = isBlocked;
+            plusButton.disabled = isBlocked;
+
+            if (isBlockedByMe) {
+                input.placeholder = 'Voce bloqueou este usuario';
+            } else if (isBlockedByOther) {
+                input.placeholder = 'Este usuario bloqueou voce';
+            } else {
+                input.placeholder = 'Digite sua mensagem...';
+            }
+        }
+
         async function getConversationByUsers(otherUserID) {
             const conversationKey = getConversationKey(currentUserID, otherUserID);
             const conversationsRef = db.collection('conversations');
+            const fixedDocRef = conversationsRef.doc(conversationKey);
+            const fixedDoc = await fixedDocRef.get();
+
+            if (fixedDoc.exists) {
+                return {
+                    conversationKey,
+                    doc: fixedDoc
+                };
+            }
+
             const convQuery = await conversationsRef
                 .where('conversationKey', '==', conversationKey)
-                .limit(1)
                 .get();
 
             if (!convQuery.empty) {
+                const newestDoc = convQuery.docs.sort((a, b) => {
+                    const aTime = a.data().lastMessageTime?.toMillis?.() || 0;
+                    const bTime = b.data().lastMessageTime?.toMillis?.() || 0;
+                    return bTime - aTime;
+                })[0];
+
+                await fixedDocRef.set({
+                    ...newestDoc.data(),
+                    participants: [currentUserID, otherUserID],
+                    conversationKey
+                }, { merge: true });
+
                 return {
                     conversationKey,
-                    doc: convQuery.docs[0]
+                    doc: await fixedDocRef.get()
                 };
             }
 
@@ -1491,17 +1628,34 @@
             });
 
             if (legacyDoc) {
-                await legacyDoc.ref.update({ conversationKey });
+                await fixedDocRef.set({
+                    ...legacyDoc.data(),
+                    participants: [currentUserID, otherUserID],
+                    conversationKey
+                }, { merge: true });
             }
 
             return {
                 conversationKey,
-                doc: legacyDoc || null
+                doc: legacyDoc ? await fixedDocRef.get() : null
             };
         }
 
         function isMobileView() {
             return window.innerWidth <= 768;
+        }
+
+        function getConversationListKey(conversationData, fallbackID) {
+            if (conversationData?.conversationKey) {
+                return conversationData.conversationKey;
+            }
+
+            if (Array.isArray(conversationData?.participants) && conversationData.participants.length === 2) {
+                const [participantA, participantB] = [...conversationData.participants].sort();
+                return `${participantA}_${participantB}`;
+            }
+
+            return fallbackID;
         }
 
         function openSidebar() {
@@ -1541,6 +1695,23 @@
         function closeMessageActionModal() {
             selectedMessageContext = null;
             document.getElementById('messageActionModal').classList.remove('active');
+        }
+
+        function openConversationActionModal(conversationContext) {
+            selectedConversationContext = conversationContext;
+            const blockButton = document.getElementById('toggleBlockConversationButton');
+            const blockedBy = Array.isArray(conversationContext?.blockedBy) ? conversationContext.blockedBy : [];
+            const isBlockedByMe = blockedBy.includes(currentUserID);
+            blockButton.innerHTML = isBlockedByMe
+                ? '<i data-lucide="unlock"></i> Desbloquear usuario'
+                : '<i data-lucide="ban"></i> Bloquear usuario';
+            document.getElementById('conversationActionModal').classList.add('active');
+            lucide.createIcons();
+        }
+
+        function closeConversationActionModal() {
+            selectedConversationContext = null;
+            document.getElementById('conversationActionModal').classList.remove('active');
         }
 
         function attachLongPressHandlers(element, messageContext) {
@@ -1583,6 +1754,87 @@
                     longPressTriggered = false;
                 }
             }, true);
+        }
+
+        function attachConversationLongPressHandlers(element, conversationContext) {
+            let longPressTimer = null;
+            let longPressTriggered = false;
+
+            const startPress = () => {
+                longPressTimer = window.setTimeout(() => {
+                    longPressTriggered = true;
+                    openConversationActionModal(conversationContext);
+                }, 550);
+            };
+
+            const clearPress = () => {
+                if (longPressTimer) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
+            };
+
+            element.addEventListener('touchstart', startPress, { passive: true });
+            element.addEventListener('touchend', clearPress);
+            element.addEventListener('touchmove', clearPress);
+            element.addEventListener('touchcancel', clearPress);
+            element.addEventListener('mousedown', startPress);
+            element.addEventListener('mouseup', clearPress);
+            element.addEventListener('mouseleave', clearPress);
+            element.addEventListener('contextmenu', (event) => {
+                event.preventDefault();
+                openConversationActionModal(conversationContext);
+            });
+            element.addEventListener('click', (event) => {
+                if (longPressTriggered) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    longPressTriggered = false;
+                }
+            }, true);
+        }
+
+        async function deleteConversation(conversationID) {
+            const conversationRef = db.collection('conversations').doc(conversationID);
+
+            while (true) {
+                const snapshot = await conversationRef.collection('messages').limit(50).get();
+                if (snapshot.empty) break;
+
+                const batch = db.batch();
+                snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+                await batch.commit();
+            }
+
+            await conversationRef.delete();
+        }
+
+        async function clearConversationMessages(conversationID) {
+            const conversationRef = db.collection('conversations').doc(conversationID);
+
+            while (true) {
+                const snapshot = await conversationRef.collection('messages').limit(50).get();
+                if (snapshot.empty) break;
+
+                const batch = db.batch();
+                snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+                await batch.commit();
+            }
+
+            await conversationRef.set({
+                lastMessage: null,
+                lastMessageTime: new Date()
+            }, { merge: true });
+        }
+
+        async function setConversationBlocked(conversationID, shouldBlock) {
+            const conversationRef = db.collection('conversations').doc(conversationID);
+            await conversationRef.set({
+                blockedBy: shouldBlock
+                    ? firebase.firestore.FieldValue.arrayUnion(currentUserID)
+                    : firebase.firestore.FieldValue.arrayRemove(currentUserID),
+                lastMessageTime: new Date()
+            }, { merge: true });
         }
 
         async function copyTextToClipboard(text) {
@@ -1742,6 +1994,19 @@
 
         function toggleAttachmentMenu() {
             document.getElementById('attachmentMenu').classList.toggle('active');
+        }
+
+        function setRecordingUI(active, text = 'Gravando audio...') {
+            document.getElementById('recordButton').classList.toggle('recording', active);
+            document.getElementById('recordingIndicator').classList.toggle('active', active);
+            document.getElementById('recordingStatusText').textContent = text;
+        }
+
+        function stopRecordingStream() {
+            if (recordingStream) {
+                recordingStream.getTracks().forEach(track => track.stop());
+                recordingStream = null;
+            }
         }
 
         function addPendingMediaMessage(file) {
@@ -1990,7 +2255,23 @@
                 conversationsUnsubscribe = conversationsRef
                     .where('participants', 'array-contains', currentUserID)
                     .onSnapshot(async (snapshot) => {
-                        const sortedConversations = snapshot.docs.sort((a, b) => {
+                        const uniqueDocs = Array.from(
+                            snapshot.docs.reduce((map, doc) => {
+                                const data = doc.data();
+                                const key = getConversationListKey(data, doc.id);
+                                const existing = map.get(key);
+                                const existingTime = existing?.data().lastMessageTime?.toMillis?.() || 0;
+                                const currentTime = data.lastMessageTime?.toMillis?.() || 0;
+
+                                if (!existing || currentTime >= existingTime) {
+                                    map.set(key, doc);
+                                }
+
+                                return map;
+                            }, new Map()).values()
+                        );
+
+                        const sortedConversations = uniqueDocs.sort((a, b) => {
                             const aTime = a.data().lastMessageTime?.toMillis?.() || 0;
                             const bTime = b.data().lastMessageTime?.toMillis?.() || 0;
                             return bTime - aTime;
@@ -1999,7 +2280,7 @@
                         const convList = document.getElementById('conversationsList');
                         convList.innerHTML = '';
 
-                        if (snapshot.empty) {
+                        if (sortedConversations.length === 0) {
                             convList.innerHTML = `
                                 <div class="empty-state">
                                     <i data-lucide="message-circle" class="empty-state-icon"></i>
@@ -2030,6 +2311,12 @@
                                 convItem.addEventListener('click', () => {
                                     selectConversation(doc.id, otherUserID, otherUser.username);
                                 });
+                                attachConversationLongPressHandlers(convItem, {
+                                    conversationID: doc.id,
+                                    otherUserID,
+                                    otherUsername: otherUser.username,
+                                    blockedBy: convData.blockedBy || []
+                                });
 
                                 if (currentConversationID === doc.id) {
                                     convItem.classList.add('active');
@@ -2058,17 +2345,24 @@
 
                 let conversationID;
                 if (existingConversation) {
+                    await conversationsRef.doc(conversationKey).set({
+                        participants: [currentUserID, otherUserID],
+                        conversationKey: conversationKey,
+                        createdAt: existingConversation.data().createdAt || new Date(),
+                        lastMessage: existingConversation.data().lastMessage || null,
+                        lastMessageTime: existingConversation.data().lastMessageTime || new Date()
+                    }, { merge: true });
                     conversationID = existingConversation.id;
                 } else {
-                    // Cria nova conversa
-                    const newConv = await conversationsRef.add({
+                    // Cria nova conversa fixa por par de usuários
+                    await conversationsRef.doc(conversationKey).set({
                         participants: [currentUserID, otherUserID],
                         conversationKey: conversationKey,
                         createdAt: new Date(),
                         lastMessage: null,
                         lastMessageTime: new Date()
                     });
-                    conversationID = newConv.id;
+                    conversationID = conversationKey;
                 }
 
                 selectConversation(conversationID, otherUserID, otherUsername);
@@ -2107,6 +2401,21 @@
                     item.classList.add('active');
                 }
             });
+
+            if (conversationStateUnsubscribe) {
+                conversationStateUnsubscribe();
+                conversationStateUnsubscribe = null;
+            }
+
+            conversationStateUnsubscribe = db.collection('conversations')
+                .doc(conversationID)
+                .onSnapshot((doc) => {
+                    if (doc.exists) {
+                        applyConversationState(doc.data());
+                    } else {
+                        applyConversationState(null);
+                    }
+                });
 
             // Carrega mensagens
             closeSidebar();
@@ -2206,6 +2515,16 @@
                                 a.download = msg.fileName;
                                 a.click();
                             });
+                        } else if (msg.type === 'audio') {
+                            const audioWrapper = document.createElement('div');
+                            audioWrapper.className = 'message-audio';
+
+                            const audio = document.createElement('audio');
+                            audio.controls = true;
+                            audio.preload = 'metadata';
+                            audio.src = msg.url;
+                            audioWrapper.appendChild(audio);
+                            bubble.appendChild(audioWrapper);
                         }
 
                         if (!isOwnMessage && isFirstRenderForMessage) {
@@ -2245,6 +2564,10 @@
             const text = input.value.trim();
 
             if (!text || !currentChatUserID || !currentConversationID || !currentConversationKey) return;
+            if (input.disabled) {
+                showToast('Conversa bloqueada', 'info');
+                return;
+            }
 
             input.value = '';
             input.style.height = 'auto';
@@ -2291,6 +2614,10 @@
          */
         async function sendFile(file) {
             if (!currentChatUserID || !file || !currentConversationID) return;
+            if (document.getElementById('messageInput').disabled) {
+                showToast('Conversa bloqueada', 'info');
+                return;
+            }
             
             // Mostra loading
             showToast('Enviando arquivo...', 'info');
@@ -2351,6 +2678,120 @@
             }
         }
 
+        async function sendAudioBlob(audioBlob) {
+            if (!currentChatUserID || !audioBlob || !currentConversationID) return;
+            if (document.getElementById('messageInput').disabled) {
+                showToast('Conversa bloqueada', 'info');
+                return;
+            }
+
+            showToast('Enviando audio...', 'info');
+
+            try {
+                const extension = audioBlob.type.includes('ogg') ? 'ogg' : 'webm';
+                const fileName = `audio-${Date.now()}.${extension}`;
+                const storageRef = storage.ref();
+                const fileRef = storageRef.child(
+                    `chats/${currentUserID}_${currentChatUserID}/${fileName}`
+                );
+
+                await fileRef.put(audioBlob, { contentType: audioBlob.type || 'audio/webm' });
+                const downloadURL = await fileRef.getDownloadURL();
+
+                await db.collection('conversations')
+                    .doc(currentConversationID)
+                    .collection('messages')
+                    .add({
+                        url: downloadURL,
+                        type: 'audio',
+                        sender: currentUserID,
+                        recipient: currentChatUserID,
+                        timestamp: new Date(),
+                        fileName,
+                        read: false
+                    });
+
+                await db.collection('conversations').doc(currentConversationID).update({
+                    lastMessage: 'Audio',
+                    lastMessageTime: new Date()
+                });
+
+                showToast('Audio enviado!', 'success');
+            } catch (error) {
+                console.error('Erro ao enviar audio:', error);
+                showToast('Erro ao enviar audio', 'error');
+            }
+        }
+
+        async function startAudioRecording() {
+            if (isRecordingAudio || !currentConversationID || !currentChatUserID) return;
+            if (document.getElementById('messageInput').disabled) {
+                showToast('Conversa bloqueada', 'info');
+                return;
+            }
+
+            if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+                showToast('Gravacao de audio nao suportada neste navegador', 'error');
+                return;
+            }
+
+            try {
+                recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioChunks = [];
+                mediaRecorder = new MediaRecorder(recordingStream);
+                isRecordingAudio = true;
+                recordStartTime = Date.now();
+                setRecordingUI(true);
+
+                mediaRecorder.addEventListener('dataavailable', (event) => {
+                    if (event.data && event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                });
+
+                mediaRecorder.addEventListener('stop', async () => {
+                    const duration = Date.now() - recordStartTime;
+                    const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+
+                    stopRecordingStream();
+                    mediaRecorder = null;
+                    audioChunks = [];
+                    isRecordingAudio = false;
+                    setRecordingUI(false);
+
+                    if (duration < 500 || audioBlob.size === 0) {
+                        showToast('Audio muito curto', 'info');
+                        return;
+                    }
+
+                    await sendAudioBlob(audioBlob);
+                });
+
+                mediaRecorder.start();
+            } catch (error) {
+                console.error('Erro ao iniciar gravacao:', error);
+                isRecordingAudio = false;
+                setRecordingUI(false);
+                stopRecordingStream();
+                showToast('Permita o microfone para gravar audio', 'error');
+            }
+        }
+
+        function stopAudioRecording() {
+            if (!isRecordingAudio || !mediaRecorder) return;
+
+            try {
+                if (mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                }
+            } catch (error) {
+                console.error('Erro ao parar gravacao:', error);
+                isRecordingAudio = false;
+                setRecordingUI(false);
+                stopRecordingStream();
+            }
+        }
+
         /**
          * Abre imagem em fullscreen
          */
@@ -2385,6 +2826,23 @@
             e.stopPropagation();
             toggleAttachmentMenu();
         });
+
+        const recordButton = document.getElementById('recordButton');
+        recordButton.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            startAudioRecording();
+        });
+        recordButton.addEventListener('mouseup', stopAudioRecording);
+        recordButton.addEventListener('mouseleave', stopAudioRecording);
+        recordButton.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startAudioRecording();
+        }, { passive: false });
+        recordButton.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            stopAudioRecording();
+        }, { passive: false });
+        recordButton.addEventListener('touchcancel', stopAudioRecording);
 
         // Anexar arquivo
         document.getElementById('attachButton').addEventListener('click', () => {
@@ -2435,6 +2893,12 @@
         document.getElementById('messageActionModal').addEventListener('click', (e) => {
             if (e.target === document.getElementById('messageActionModal')) {
                 closeMessageActionModal();
+            }
+        });
+
+        document.getElementById('conversationActionModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('conversationActionModal')) {
+                closeConversationActionModal();
             }
         });
 
@@ -2550,6 +3014,63 @@
             const tools = document.querySelector('.composer-tools');
             if (tools && !tools.contains(e.target)) {
                 closeAttachmentMenu();
+            }
+        });
+
+        document.getElementById('deleteConversationButton').addEventListener('click', async () => {
+            if (!selectedConversationContext) return;
+
+            const { conversationID, otherUsername } = selectedConversationContext;
+            closeConversationActionModal();
+
+            if (!confirm(`Apagar a conversa com ${otherUsername}?`)) return;
+
+            try {
+                await deleteConversation(conversationID);
+
+                if (currentConversationID === conversationID) {
+                    resetChatUI();
+                }
+
+                showToast('Conversa apagada', 'success');
+            } catch (error) {
+                console.error('Erro ao apagar conversa:', error);
+                showToast('Erro ao apagar conversa', 'error');
+            }
+        });
+
+        document.getElementById('clearConversationButton').addEventListener('click', async () => {
+            if (!selectedConversationContext) return;
+
+            const { conversationID, otherUsername } = selectedConversationContext;
+            closeConversationActionModal();
+
+            if (!confirm(`Limpar todas as mensagens da conversa com ${otherUsername}?`)) return;
+
+            try {
+                await clearConversationMessages(conversationID);
+                showToast('Mensagens apagadas', 'success');
+            } catch (error) {
+                console.error('Erro ao limpar conversa:', error);
+                showToast('Erro ao limpar conversa', 'error');
+            }
+        });
+
+        document.getElementById('toggleBlockConversationButton').addEventListener('click', async () => {
+            if (!selectedConversationContext) return;
+
+            const { conversationID, otherUsername, blockedBy = [] } = selectedConversationContext;
+            const isBlockedByMe = blockedBy.includes(currentUserID);
+            closeConversationActionModal();
+
+            if (!confirm(`${isBlockedByMe ? 'Desbloquear' : 'Bloquear'} ${otherUsername}?`)) return;
+
+            try {
+                await setConversationBlocked(conversationID, !isBlockedByMe);
+                showToast(isBlockedByMe ? 'Usuario desbloqueado' : 'Usuario bloqueado', 'success');
+            } catch (error) {
+                console.error('Erro ao atualizar bloqueio:', error);
+                showToast('Erro ao atualizar bloqueio', 'error');
             }
         });
 
