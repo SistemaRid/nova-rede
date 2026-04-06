@@ -3,11 +3,19 @@
  <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0a0a0a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Ephemeral">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" type="image/png" sizes="512x512" href="./nova-rede.png">
+  <link rel="apple-touch-icon" href="./nova-rede.png">
+  <link rel="manifest" href="./manifest.webmanifest">
   <title>Chat Privado - Mensageiro Secreto Elegante</title><!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-storage-compat.js"></script><!-- Lucide Icons -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
   <style>
         * {
@@ -39,6 +47,7 @@
             height: 100%;
             width: 100%;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--primary-black);
         }
 
         body {
@@ -411,6 +420,8 @@
             line-height: 1.5;
             word-wrap: break-word;
             animation: slideInUp 0.3s ease-out;
+            -webkit-touch-callout: none;
+            user-select: text;
         }
 
         .message-bubble.received {
@@ -579,6 +590,10 @@
             display: flex;
         }
 
+        #messageActionModal {
+            align-items: flex-end;
+        }
+
         .modal {
             background: var(--dark-gray);
             border: 1px solid var(--glass-border);
@@ -634,6 +649,62 @@
         .modal-button:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 20px rgba(255, 255, 255, 0.3);
+        }
+
+        .action-sheet {
+            background: linear-gradient(180deg, rgba(31, 31, 31, 0.98), rgba(18, 18, 18, 0.98));
+            border: 1px solid var(--glass-border);
+            border-radius: 22px 22px 0 0;
+            width: 100%;
+            max-width: 520px;
+            padding: 18px 18px calc(env(safe-area-inset-bottom, 0px) + 18px);
+            box-shadow: 0 -15px 40px rgba(0, 0, 0, 0.45);
+            animation: slideInUp 0.25s ease-out;
+        }
+
+        .action-sheet-title {
+            font-size: 13px;
+            color: var(--soft-gray);
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            margin-bottom: 14px;
+        }
+
+        .action-sheet-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .action-sheet-button {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-white);
+            border-radius: 14px;
+            padding: 14px 16px;
+            font-size: 15px;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .action-sheet-button:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.18);
+        }
+
+        .action-sheet-button.danger {
+            color: #ff8c82;
+            border-color: rgba(255, 59, 48, 0.2);
+            background: rgba(255, 59, 48, 0.08);
+        }
+
+        .action-sheet-button i {
+            width: 18px;
+            height: 18px;
         }
 
         /* ==================== TOAST ==================== */
@@ -839,6 +910,10 @@
                 opacity: 0.9;
             }
 
+            .sidebar-header {
+                display: none;
+            }
+
             .sidebar {
                 display: flex;
                 position: absolute;
@@ -892,6 +967,13 @@
                 padding: 12px 14px;
             }
 
+            .form-input,
+            .search-input,
+            .modal-input,
+            .message-input {
+                font-size: 16px;
+            }
+
             .toast-container {
                 bottom: 20px;
                 right: 20px;
@@ -914,10 +996,6 @@
         }
 
         @media (max-width: 480px) {
-            .sidebar-header {
-                padding: 16px;
-            }
-
             .search-container {
                 padding: 14px 16px;
             }
@@ -1053,6 +1131,19 @@
      <p id="foundUserID" style="font-size: 16px; font-weight: 600; color: var(--accent-blue); font-family: 'Courier New', monospace;"></p>
     </div><button class="modal-button" id="startChatButton">Iniciar Conversa</button>
    </div>
+  </div>
+  <div class="modal-overlay" id="messageActionModal">
+   <div class="action-sheet">
+    <div class="action-sheet-title">
+     Ações da mensagem
+    </div>
+    <div class="action-sheet-list">
+     <button class="action-sheet-button" id="copyMessageButton"> <i data-lucide="copy"></i> Copiar mensagem </button>
+     <button class="action-sheet-button danger" id="deleteMessageButton"> <i data-lucide="trash-2"></i> Apagar </button>
+     <button class="action-sheet-button" id="editMessageButton"> <i data-lucide="pencil"></i> Editar </button>
+     <button class="action-sheet-button" id="forwardMessageButton"> <i data-lucide="forward"></i> Encaminhar </button>
+    </div>
+   </div>
   </div><!-- TOAST CONTAINER -->
   <div class="toast-container" id="toastContainer"></div><!-- INPUT OCULTOS --> <input type="file" id="fileInput" style="display: none;" accept="*/*"> <input type="file" id="galleryInput" style="display: none;" accept="image/*"> <input type="file" id="cameraInput" style="display: none;" accept="image/*" capture="environment"> <!-- MODAL PARA VER IMAGEM EM FULLSCREEN -->
   <div class="modal-overlay" id="imageModal" style="display: none;">
@@ -1071,11 +1162,13 @@
             messagingSenderId: "855256737101",
             appId: "1:855256737101:web:c5295b8fdf2970f40a8304"
         };
+        const publicVapidKey = "BJm-ECPol61g284B5IVfi-X6C9ZkIYYkIDg9Myh-sHv4TrYvg3zujF8Z3DxIcMirZ7NWGgRM4Y2Jhx/wQI_VMEU";
 
         // Inicializar Firebase
         const app = firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         const storage = firebase.storage();
+        const messaging = firebase.messaging.isSupported() ? firebase.messaging() : null;
 
         // ==================== VARIÁVEIS GLOBAIS ====================
         let currentUser = null;
@@ -1086,6 +1179,10 @@
         let currentConversationID = null;
         let conversations = {};
         let messageUnsubscribe = null;
+        let selectedMessageContext = null;
+        let pushToken = null;
+        let serviceWorkerRegistration = null;
+        let notifiedMessageIds = new Set();
 
         // ==================== FUNÇÕES UTILITÁRIAS ====================
         
@@ -1231,6 +1328,7 @@
             currentChatUserID = null;
             currentConversationID = null;
             currentConversationKey = null;
+            notifiedMessageIds = new Set();
 
             if (messageUnsubscribe) {
                 messageUnsubscribe();
@@ -1314,6 +1412,205 @@
             }
         }
 
+        function openMessageActionModal(messageContext) {
+            selectedMessageContext = messageContext;
+            document.getElementById('messageActionModal').classList.add('active');
+        }
+
+        function closeMessageActionModal() {
+            selectedMessageContext = null;
+            document.getElementById('messageActionModal').classList.remove('active');
+        }
+
+        function attachLongPressHandlers(element, messageContext) {
+            let longPressTimer = null;
+            let longPressTriggered = false;
+
+            const startPress = (event) => {
+                if (event.type === 'touchstart') {
+                    longPressTriggered = false;
+                }
+
+                longPressTimer = window.setTimeout(() => {
+                    longPressTriggered = true;
+                    openMessageActionModal(messageContext);
+                }, 550);
+            };
+
+            const clearPress = () => {
+                if (longPressTimer) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
+            };
+
+            element.addEventListener('touchstart', startPress, { passive: true });
+            element.addEventListener('touchend', clearPress);
+            element.addEventListener('touchmove', clearPress);
+            element.addEventListener('touchcancel', clearPress);
+            element.addEventListener('mousedown', startPress);
+            element.addEventListener('mouseup', clearPress);
+            element.addEventListener('mouseleave', clearPress);
+            element.addEventListener('contextmenu', (event) => {
+                event.preventDefault();
+                openMessageActionModal(messageContext);
+            });
+            element.addEventListener('click', (event) => {
+                if (longPressTriggered) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    longPressTriggered = false;
+                }
+            }, true);
+        }
+
+        async function copyTextToClipboard(text) {
+            try {
+                if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(text);
+                    return true;
+                }
+            } catch (error) {
+                console.error('Erro ao copiar com clipboard API:', error);
+            }
+
+            const helper = document.createElement('textarea');
+            helper.value = text;
+            helper.style.position = 'fixed';
+            helper.style.opacity = '0';
+            document.body.appendChild(helper);
+            helper.focus();
+            helper.select();
+            const copied = document.execCommand('copy');
+            document.body.removeChild(helper);
+            return copied;
+        }
+
+        async function saveMessageText(conversationID, messageID, text) {
+            const conversationEncryptionKey = await generateEncryptionKey(currentConversationKey);
+            const encryptedPayload = await encryptMessage(text, conversationEncryptionKey);
+
+            await db.collection('conversations')
+                .doc(conversationID)
+                .collection('messages')
+                .doc(messageID)
+                .update({
+                    text: encryptedPayload.encryptedText,
+                    iv: encryptedPayload.iv,
+                    edited: true
+                });
+        }
+
+        async function sendTextToConversation(conversationID, conversationKey, recipientID, text) {
+            const conversationEncryptionKey = await generateEncryptionKey(conversationKey);
+            const encryptedPayload = await encryptMessage(text, conversationEncryptionKey);
+
+            await db.collection('conversations')
+                .doc(conversationID)
+                .collection('messages')
+                .add({
+                    text: encryptedPayload.encryptedText,
+                    iv: encryptedPayload.iv,
+                    type: 'text',
+                    encrypted: true,
+                    sender: currentUserID,
+                    recipient: recipientID,
+                    timestamp: new Date(),
+                    read: false,
+                    edited: false
+                });
+
+            await db.collection('conversations').doc(conversationID).update({
+                lastMessage: text,
+                lastMessageTime: new Date()
+            });
+        }
+
+        async function registerPushNotifications() {
+            if (!messaging) {
+                console.warn('Firebase Messaging nao suportado neste navegador.');
+                return;
+            }
+
+            if (!('serviceWorker' in navigator) || !('Notification' in window)) {
+                console.warn('Push nao suportado neste dispositivo.');
+                return;
+            }
+
+            if (!publicVapidKey || publicVapidKey.includes('SUBSTITUA')) {
+                console.warn('Defina a publicVapidKey antes de usar push.');
+                return;
+            }
+
+            try {
+                serviceWorkerRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                const permission = await Notification.requestPermission();
+
+                if (permission !== 'granted') {
+                    showToast('Notificacoes nao permitidas', 'info');
+                    return;
+                }
+
+                const token = await messaging.getToken({
+                    vapidKey: publicVapidKey,
+                    serviceWorkerRegistration
+                });
+
+                if (!token) {
+                    console.warn('Nenhum token FCM retornado.');
+                    return;
+                }
+
+                pushToken = token;
+                await savePushToken(token);
+            } catch (error) {
+                console.error('Erro ao registrar notificacoes push:', error);
+                showToast('Nao foi possivel ativar notificacoes', 'error');
+            }
+        }
+
+        async function savePushToken(token) {
+            if (!currentUserID || !token) return;
+
+            const usersRef = db.collection('users');
+            const userQuery = await usersRef.where('userID', '==', currentUserID).limit(1).get();
+            if (userQuery.empty) return;
+
+            await userQuery.docs[0].ref.set({
+                pushTokens: firebase.firestore.FieldValue.arrayUnion(token),
+                notificationsEnabled: true,
+                lastPushTokenUpdate: new Date()
+            }, { merge: true });
+        }
+
+        async function removePushToken() {
+            if (!currentUserID || !pushToken) return;
+
+            try {
+                const userQuery = await db.collection('users').where('userID', '==', currentUserID).limit(1).get();
+                if (!userQuery.empty) {
+                    await userQuery.docs[0].ref.set({
+                        pushTokens: firebase.firestore.FieldValue.arrayRemove(pushToken),
+                        lastPushTokenUpdate: new Date()
+                    }, { merge: true });
+                }
+            } catch (error) {
+                console.error('Erro ao remover token push:', error);
+            }
+        }
+
+        function notifyForegroundMessage(title, body) {
+            if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+            const notification = new Notification(title, {
+                body,
+                icon: './nova-rede.png',
+                tag: `ephemeral-${Date.now()}`
+            });
+
+            notification.onclick = () => window.focus();
+        }
+
         // ==================== AUTENTICAÇÃO ====================
 
         /**
@@ -1368,6 +1665,7 @@
                 document.getElementById('chatScreen').style.display = 'flex';
                 syncUserHeader();
                 resetChatUI();
+                await registerPushNotifications();
 
                 // Carrega conversas
                 loadConversations();
@@ -1385,6 +1683,7 @@
          */
         function handleLogout() {
             if (confirm('Tem certeza que deseja sair?')) {
+                removePushToken();
                 currentUser = null;
                 currentUserID = null;
                 resetChatUI();
@@ -1536,9 +1835,11 @@
 
                 selectConversation(conversationID, otherUserID, otherUsername);
                 loadConversations();
+                return conversationID;
             } catch (error) {
                 console.error('Erro ao criar/carregar conversa:', error);
                 showToast('Erro ao iniciar conversa', 'error');
+                return null;
             }
         }
 
@@ -1595,6 +1896,8 @@
 
                     for (const doc of snapshot.docs) {
                         const msg = doc.data();
+                        const isOwnMessage = msg.sender === currentUserID;
+                        const isFirstRenderForMessage = !notifiedMessageIds.has(doc.id);
 
                         // Verifica se mensagem expirou
                         if (isMessageExpired(msg.timestamp.toDate())) {
@@ -1618,6 +1921,14 @@
 
                         if (msg.type === 'text') {
                             bubble.textContent = displayText;
+                            if (isOwnMessage) {
+                                attachLongPressHandlers(bubble, {
+                                    conversationID,
+                                    messageID: doc.id,
+                                    otherUserID,
+                                    text: displayText
+                                });
+                            }
                         } else if (msg.type === 'image') {
                             const img = document.createElement('img');
                             img.src = msg.url;
@@ -1641,13 +1952,24 @@
                             });
                         }
 
+                        if (!isOwnMessage && isFirstRenderForMessage) {
+                            const notificationBody = msg.type === 'text'
+                                ? displayText
+                                : (msg.type === 'image' ? 'Enviou uma imagem' : `Enviou ${msg.fileName || 'um arquivo'}`);
+
+                            if (document.hidden || currentChatUserID !== otherUserID) {
+                                notifyForegroundMessage(currentChatUser || 'Nova mensagem', notificationBody);
+                            }
+                        }
+
                         const timestamp = document.createElement('div');
                         timestamp.className = 'message-timestamp';
-                        timestamp.textContent = formatTime(msg.timestamp.toDate());
+                        timestamp.textContent = `${formatTime(msg.timestamp.toDate())}${msg.edited ? ' • editada' : ''}`;
 
                         msgGroup.appendChild(bubble);
                         msgGroup.appendChild(timestamp);
                         messagesContainer.appendChild(msgGroup);
+                        notifiedMessageIds.add(doc.id);
                         lucide.createIcons();
                     }
 
@@ -1671,6 +1993,13 @@
             input.style.height = 'auto';
 
             try {
+                await sendTextToConversation(
+                    currentConversationID,
+                    currentConversationKey,
+                    currentChatUserID,
+                    text
+                );
+                return;
                 // Criptografa mensagem
                 const conversationEncryptionKey = await generateEncryptionKey(currentConversationKey);
                 const encryptedPayload = await encryptMessage(text, conversationEncryptionKey);
@@ -1729,6 +2058,7 @@
                         url: downloadURL,
                         type: messageType,
                         sender: currentUserID,
+                        recipient: currentChatUserID,
                         timestamp: new Date(),
                         fileName: file.name,
                         read: false
@@ -1820,12 +2150,130 @@
             }
         });
 
+        document.getElementById('messageActionModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('messageActionModal')) {
+                closeMessageActionModal();
+            }
+        });
+
+        document.getElementById('copyMessageButton').addEventListener('click', async () => {
+            if (!selectedMessageContext) return;
+
+            const copied = await copyTextToClipboard(selectedMessageContext.text);
+            closeMessageActionModal();
+            showToast(copied ? 'Mensagem copiada' : 'Nao foi possivel copiar', copied ? 'success' : 'error');
+        });
+
+        document.getElementById('deleteMessageButton').addEventListener('click', async () => {
+            if (!selectedMessageContext) return;
+
+            const { conversationID, messageID } = selectedMessageContext;
+            closeMessageActionModal();
+
+            if (!confirm('Apagar esta mensagem?')) return;
+
+            try {
+                await db.collection('conversations')
+                    .doc(conversationID)
+                    .collection('messages')
+                    .doc(messageID)
+                    .delete();
+                showToast('Mensagem apagada', 'success');
+            } catch (error) {
+                console.error('Erro ao apagar mensagem:', error);
+                showToast('Erro ao apagar mensagem', 'error');
+            }
+        });
+
+        document.getElementById('editMessageButton').addEventListener('click', async () => {
+            if (!selectedMessageContext) return;
+
+            const { conversationID, messageID, text } = selectedMessageContext;
+            closeMessageActionModal();
+            const editedText = prompt('Editar mensagem:', text);
+
+            if (editedText === null) return;
+
+            const trimmedText = editedText.trim();
+            if (!trimmedText) {
+                showToast('A mensagem nao pode ficar vazia', 'error');
+                return;
+            }
+
+            try {
+                await saveMessageText(conversationID, messageID, trimmedText);
+                showToast('Mensagem editada', 'success');
+            } catch (error) {
+                console.error('Erro ao editar mensagem:', error);
+                showToast('Erro ao editar mensagem', 'error');
+            }
+        });
+
+        document.getElementById('forwardMessageButton').addEventListener('click', async () => {
+            if (!selectedMessageContext) return;
+
+            const messageText = selectedMessageContext.text;
+            closeMessageActionModal();
+            const targetID = prompt('Encaminhar para qual ID?');
+
+            if (targetID === null) return;
+
+            const sanitizedID = targetID.trim();
+            if (!/^\d{5}$/.test(sanitizedID)) {
+                showToast('Digite um ID valido com 5 numeros', 'error');
+                return;
+            }
+
+            if (sanitizedID === currentUserID) {
+                showToast('Voce nao pode encaminhar para si mesmo', 'error');
+                return;
+            }
+
+            try {
+                const targetQuery = await db.collection('users')
+                    .where('userID', '==', sanitizedID)
+                    .limit(1)
+                    .get();
+
+                if (targetQuery.empty) {
+                    showToast('Usuario nao encontrado', 'error');
+                    return;
+                }
+
+                const targetUser = targetQuery.docs[0].data();
+                const forwardedConversationID = await createOrLoadConversation(sanitizedID, targetUser.username);
+
+                if (!forwardedConversationID) return;
+
+                const forwardedConversationKey = getConversationKey(currentUserID, sanitizedID);
+                await sendTextToConversation(
+                    forwardedConversationID,
+                    forwardedConversationKey,
+                    sanitizedID,
+                    messageText
+                );
+
+                showToast('Mensagem encaminhada', 'success');
+            } catch (error) {
+                console.error('Erro ao encaminhar mensagem:', error);
+                showToast('Erro ao encaminhar mensagem', 'error');
+            }
+        });
+
         document.getElementById('backToSidebarButton').addEventListener('click', () => {
             resetChatUI();
         });
 
         window.addEventListener('resize', handleViewportLayout);
         handleViewportLayout();
+
+        if (messaging) {
+            messaging.onMessage((payload) => {
+                const title = payload.notification?.title || 'Nova mensagem';
+                const body = payload.notification?.body || 'Voce recebeu uma nova mensagem';
+                notifyForegroundMessage(title, body);
+            });
+        }
 
         // Inicializa icons
         lucide.createIcons();
