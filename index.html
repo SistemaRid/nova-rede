@@ -398,6 +398,29 @@
             font-family: 'Courier New', monospace;
         }
 
+        .chat-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .chat-header-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .typing-status {
+            font-size: 11px;
+            color: #8dd7a0;
+            display: none;
+        }
+
+        .typing-status.active {
+            display: block;
+        }
+
         /* --- MENSAGENS --- */
         .messages-container {
             flex: 1;
@@ -450,6 +473,37 @@
             font-size: 11px;
             color: var(--soft-gray);
             margin-top: 4px;
+        }
+
+        .message-status {
+            margin-left: 6px;
+            font-size: 11px;
+            color: inherit;
+            opacity: 0.8;
+        }
+
+        .message-reply {
+            margin-bottom: 8px;
+            padding: 8px 10px;
+            border-left: 3px solid rgba(255, 255, 255, 0.35);
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.12);
+            font-size: 12px;
+        }
+
+        .message-reply-author {
+            display: block;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .message-reply-preview {
+            opacity: 0.85;
+            word-break: break-word;
+        }
+
+        .message-match {
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.28);
         }
 
         .message-image {
@@ -532,8 +586,9 @@
             padding: 20px;
             border-top: 1px solid var(--glass-border);
             display: flex;
+            flex-direction: column;
             gap: 12px;
-            align-items: center;
+            align-items: stretch;
             animation: slideInUp 0.6s ease-out;
             background: rgba(15, 15, 15, 0.92);
             backdrop-filter: blur(18px);
@@ -543,12 +598,55 @@
         }
 
         .input-group {
-            flex: 1;
             display: flex;
             gap: 8px;
             align-items: center;
             min-width: 0;
             max-width: 100%;
+            width: 100%;
+        }
+
+        .reply-banner {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .reply-banner.active {
+            display: flex;
+        }
+
+        .reply-banner-content {
+            min-width: 0;
+        }
+
+        .reply-banner-label {
+            font-size: 11px;
+            color: var(--soft-gray);
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .reply-banner-text {
+            font-size: 13px;
+            color: var(--text-white);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .conversation-pin {
+            display: inline-flex;
+            margin-left: 8px;
+            opacity: 0.8;
+            vertical-align: middle;
         }
 
         .composer-tools {
@@ -1262,15 +1360,28 @@
        <button class="back-button" id="backToSidebarButton" title="Conversas"> <i data-lucide="arrow-left" style="width: 18px; height: 18px;"></i> </button>
        <div class="chat-header-info">
         <h2 id="chatHeaderName">Selecione uma conversa</h2>
-        <p id="chatHeaderId">ID: -----</p>
+        <div class="chat-header-meta">
+         <p id="chatHeaderId">ID: -----</p>
+         <span class="typing-status" id="chatTypingStatus">Digitando...</span>
+        </div>
        </div>
+      </div>
+      <div class="chat-header-actions">
+       <button class="icon-button" id="chatSearchButton" title="Buscar no chat"> <i data-lucide="search" style="width: 18px; height: 18px;"></i> </button>
       </div>
      </div>
     <div class="messages-container" id="messagesContainer" style="display: none;">
      <!-- Mensagens aparecem aqui -->
     </div>
-    <div class="input-area" id="inputArea" style="display: none;">
-     <div class="input-group">
+     <div class="input-area" id="inputArea" style="display: none;">
+      <div class="reply-banner" id="replyBanner">
+       <div class="reply-banner-content">
+        <div class="reply-banner-label" id="replyBannerLabel">Respondendo</div>
+        <div class="reply-banner-text" id="replyBannerText"></div>
+       </div>
+       <button class="icon-button" id="cancelReplyButton" title="Cancelar resposta"> <i data-lucide="x" style="width: 18px; height: 18px;"></i> </button>
+      </div>
+      <div class="input-group">
       <div class="composer-tools">
        <button class="icon-button" id="plusButton" title="Mais opcoes"> <i data-lucide="plus" style="width: 18px; height: 18px;"></i> </button>
        <div class="attachment-menu" id="attachmentMenu">
@@ -1315,8 +1426,9 @@
      Ações da mensagem
     </div>
     <div class="action-sheet-list">
-     <button class="action-sheet-button" id="copyMessageButton"> <i data-lucide="copy"></i> Copiar mensagem </button>
-     <button class="action-sheet-button danger" id="deleteMessageButton"> <i data-lucide="trash-2"></i> Apagar </button>
+      <button class="action-sheet-button" id="copyMessageButton"> <i data-lucide="copy"></i> Copiar mensagem </button>
+      <button class="action-sheet-button" id="replyMessageButton"> <i data-lucide="reply"></i> Responder </button>
+      <button class="action-sheet-button danger" id="deleteMessageButton"> <i data-lucide="trash-2"></i> Apagar </button>
      <button class="action-sheet-button" id="editMessageButton"> <i data-lucide="pencil"></i> Editar </button>
      <button class="action-sheet-button" id="forwardMessageButton"> <i data-lucide="forward"></i> Encaminhar </button>
     </div>
@@ -1328,7 +1440,9 @@
      AÃ§Ãµes da conversa
     </div>
     <div class="action-sheet-list">
+     <button class="action-sheet-button" id="togglePinConversationButton"> <i data-lucide="pin"></i> Fixar conversa </button>
      <button class="action-sheet-button" id="clearConversationButton"> <i data-lucide="eraser"></i> Limpar mensagens </button>
+     <button class="action-sheet-button" id="changeConversationTtlButton"> <i data-lucide="timer"></i> Tempo das mensagens </button>
      <button class="action-sheet-button" id="toggleBlockConversationButton"> <i data-lucide="ban"></i> Bloquear usuÃ¡rio </button>
      <button class="action-sheet-button danger" id="deleteConversationButton"> <i data-lucide="trash-2"></i> Apagar conversa </button>
     </div>
@@ -1347,7 +1461,7 @@
             apiKey: "AIzaSyBYSoz9F_pAgznjUjWmPIPqL_jdCk1CFVY",
             authDomain: "rede-b5f80.firebaseapp.com",
             projectId: "rede-b5f80",
-            storageBucket: "rede-b5f80.firebasestorage.app",
+            storageBucket: "rede-b5f80.appspot.com",
             messagingSenderId: "855256737101",
             appId: "1:855256737101:web:c5295b8fdf2970f40a8304"
         };
@@ -1382,6 +1496,12 @@
         let isRecordingAudio = false;
         let recordStartTime = 0;
         let currentConversationState = null;
+        let replyDraft = null;
+        let currentChatSearchTerm = '';
+        let currentMessagesCache = [];
+        let typingDebounceTimeout = null;
+        let typingReleaseTimeout = null;
+        const MAX_INLINE_MEDIA_BYTES = 700 * 1024;
 
         // ==================== FUNÇÕES UTILITÁRIAS ====================
         
@@ -1523,12 +1643,19 @@
         }
 
         function resetChatUI() {
+            if (currentConversationID) {
+                setTypingState(false).catch(() => {});
+            }
+
             currentChatUser = null;
             currentChatUserID = null;
             currentConversationID = null;
             currentConversationKey = null;
             currentConversationState = null;
+            currentChatSearchTerm = '';
+            currentMessagesCache = [];
             notifiedMessageIds = new Set();
+            clearReplyDraft();
 
             if (messageUnsubscribe) {
                 messageUnsubscribe();
@@ -1543,6 +1670,16 @@
             if (conversationsUnsubscribe && !currentUserID) {
                 conversationsUnsubscribe();
                 conversationsUnsubscribe = null;
+            }
+
+            if (typingDebounceTimeout) {
+                clearTimeout(typingDebounceTimeout);
+                typingDebounceTimeout = null;
+            }
+
+            if (typingReleaseTimeout) {
+                clearTimeout(typingReleaseTimeout);
+                typingReleaseTimeout = null;
             }
 
             document.getElementById('chatHeader').style.display = 'none';
@@ -1581,6 +1718,145 @@
             } else {
                 input.placeholder = 'Digite sua mensagem...';
             }
+
+            const typingStatus = document.getElementById('chatTypingStatus');
+            const typingBy = Array.isArray(conversationData?.typingBy) ? conversationData.typingBy : [];
+            const isOtherTyping = typingBy.includes(currentChatUserID);
+            typingStatus.classList.toggle('active', isOtherTyping);
+        }
+
+        function getConversationTtlHours(conversationData = currentConversationState) {
+            const ttlHours = Number(conversationData?.ttlHours);
+            return Number.isFinite(ttlHours) && ttlHours > 0 ? ttlHours : 24;
+        }
+
+        function getMessageExpirationDate(messageData) {
+            if (messageData?.expiresAt?.toDate) {
+                return messageData.expiresAt.toDate();
+            }
+
+            if (messageData?.timestamp?.toDate) {
+                const expiresAt = new Date(messageData.timestamp.toDate());
+                expiresAt.setHours(expiresAt.getHours() + getConversationTtlHours());
+                return expiresAt;
+            }
+
+            return null;
+        }
+
+        function isConversationPinned(conversationData) {
+            return Array.isArray(conversationData?.pinnedBy) && conversationData.pinnedBy.includes(currentUserID);
+        }
+
+        function setReplyDraft(messageContext) {
+            replyDraft = messageContext;
+            const banner = document.getElementById('replyBanner');
+            document.getElementById('replyBannerLabel').textContent = `Respondendo ${messageContext.isOwn ? 'voce' : messageContext.authorName}`;
+            document.getElementById('replyBannerText').textContent = messageContext.text;
+            banner.classList.add('active');
+        }
+
+        function clearReplyDraft() {
+            replyDraft = null;
+            document.getElementById('replyBanner').classList.remove('active');
+            document.getElementById('replyBannerText').textContent = '';
+        }
+
+        async function setConversationPinned(conversationID, shouldPin) {
+            await db.collection('conversations').doc(conversationID).set({
+                pinnedBy: shouldPin
+                    ? firebase.firestore.FieldValue.arrayUnion(currentUserID)
+                    : firebase.firestore.FieldValue.arrayRemove(currentUserID)
+            }, { merge: true });
+        }
+
+        async function setConversationTtl(conversationID, ttlHours) {
+            await db.collection('conversations').doc(conversationID).set({
+                ttlHours
+            }, { merge: true });
+        }
+
+        async function setTypingState(isTyping) {
+            if (!currentConversationID) return;
+
+            await db.collection('conversations').doc(currentConversationID).set({
+                typingBy: isTyping
+                    ? firebase.firestore.FieldValue.arrayUnion(currentUserID)
+                    : firebase.firestore.FieldValue.arrayRemove(currentUserID)
+            }, { merge: true });
+        }
+
+        function scheduleTypingRelease() {
+            if (typingReleaseTimeout) {
+                clearTimeout(typingReleaseTimeout);
+            }
+
+            typingReleaseTimeout = setTimeout(() => {
+                setTypingState(false).catch((error) => {
+                    console.error('Erro ao limpar digitacao:', error);
+                });
+            }, 1400);
+        }
+
+        function blobToDataUrl(blob) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(reader.error);
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        function estimateDataUrlBytes(dataUrl) {
+            const base64 = String(dataUrl).split(',')[1] || '';
+            return Math.ceil((base64.length * 3) / 4);
+        }
+
+        async function compressImageForFirestore(file) {
+            const imageUrl = URL.createObjectURL(file);
+
+            try {
+                const image = await new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.onerror = reject;
+                    img.src = imageUrl;
+                });
+
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                const maxDimension = 1280;
+                const ratio = Math.min(1, maxDimension / Math.max(image.width, image.height));
+                canvas.width = Math.max(1, Math.round(image.width * ratio));
+                canvas.height = Math.max(1, Math.round(image.height * ratio));
+                context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+                for (const quality of [0.82, 0.72, 0.62, 0.52, 0.42]) {
+                    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+                    if (!blob) continue;
+
+                    const dataUrl = await blobToDataUrl(blob);
+                    if (estimateDataUrlBytes(dataUrl) <= MAX_INLINE_MEDIA_BYTES) {
+                        return {
+                            dataUrl,
+                            fileName: file.name.replace(/\.[^.]+$/, '') + '.jpg'
+                        };
+                    }
+                }
+            } finally {
+                URL.revokeObjectURL(imageUrl);
+            }
+
+            throw new Error('Imagem muito grande para envio sem Storage');
+        }
+
+        async function prepareAudioForFirestore(audioBlob) {
+            const dataUrl = await blobToDataUrl(audioBlob);
+            if (estimateDataUrlBytes(dataUrl) > MAX_INLINE_MEDIA_BYTES) {
+                throw new Error('Audio muito grande para envio sem Storage');
+            }
+
+            return dataUrl;
         }
 
         async function getConversationByUsers(otherUserID) {
@@ -1689,6 +1965,8 @@
 
         function openMessageActionModal(messageContext) {
             selectedMessageContext = messageContext;
+            document.getElementById('deleteMessageButton').style.display = messageContext.isOwn ? 'flex' : 'none';
+            document.getElementById('editMessageButton').style.display = messageContext.isOwn ? 'flex' : 'none';
             document.getElementById('messageActionModal').classList.add('active');
         }
 
@@ -1700,11 +1978,18 @@
         function openConversationActionModal(conversationContext) {
             selectedConversationContext = conversationContext;
             const blockButton = document.getElementById('toggleBlockConversationButton');
+            const pinButton = document.getElementById('togglePinConversationButton');
+            const ttlButton = document.getElementById('changeConversationTtlButton');
             const blockedBy = Array.isArray(conversationContext?.blockedBy) ? conversationContext.blockedBy : [];
             const isBlockedByMe = blockedBy.includes(currentUserID);
+            const isPinned = Array.isArray(conversationContext?.pinnedBy) && conversationContext.pinnedBy.includes(currentUserID);
             blockButton.innerHTML = isBlockedByMe
                 ? '<i data-lucide="unlock"></i> Desbloquear usuario'
                 : '<i data-lucide="ban"></i> Bloquear usuario';
+            pinButton.innerHTML = isPinned
+                ? '<i data-lucide="pin-off"></i> Desafixar conversa'
+                : '<i data-lucide="pin"></i> Fixar conversa';
+            ttlButton.innerHTML = `<i data-lucide="timer"></i> Tempo das mensagens (${getConversationTtlHours(conversationContext)}h)`;
             document.getElementById('conversationActionModal').classList.add('active');
             lucide.createIcons();
         }
@@ -1874,9 +2159,12 @@
                 });
         }
 
-        async function sendTextToConversation(conversationID, conversationKey, recipientID, text) {
+        async function sendTextToConversation(conversationID, conversationKey, recipientID, text, replyContext = null) {
             const conversationEncryptionKey = await generateEncryptionKey(conversationKey);
             const encryptedPayload = await encryptMessage(text, conversationEncryptionKey);
+            const timestamp = new Date();
+            const expiresAt = new Date(timestamp);
+            expiresAt.setHours(expiresAt.getHours() + getConversationTtlHours());
 
             await db.collection('conversations')
                 .doc(conversationID)
@@ -1888,14 +2176,23 @@
                     encrypted: true,
                     sender: currentUserID,
                     recipient: recipientID,
-                    timestamp: new Date(),
+                    timestamp,
+                    expiresAt,
                     read: false,
-                    edited: false
+                    delivered: true,
+                    edited: false,
+                    replyTo: replyContext ? {
+                        messageID: replyContext.messageID,
+                        text: replyContext.text,
+                        senderID: replyContext.senderID,
+                        senderName: replyContext.authorName
+                    } : null
                 });
 
             await db.collection('conversations').doc(conversationID).update({
                 lastMessage: text,
-                lastMessageTime: new Date()
+                lastMessageTime: timestamp,
+                typingBy: firebase.firestore.FieldValue.arrayRemove(currentUserID)
             });
         }
 
@@ -2272,6 +2569,12 @@
                         );
 
                         const sortedConversations = uniqueDocs.sort((a, b) => {
+                            const aPinned = isConversationPinned(a.data()) ? 1 : 0;
+                            const bPinned = isConversationPinned(b.data()) ? 1 : 0;
+                            if (aPinned !== bPinned) {
+                                return bPinned - aPinned;
+                            }
+
                             const aTime = a.data().lastMessageTime?.toMillis?.() || 0;
                             const bTime = b.data().lastMessageTime?.toMillis?.() || 0;
                             return bTime - aTime;
@@ -2305,7 +2608,7 @@
                                 convItem.className = 'conversation-item';
                                 convItem.dataset.conversationId = doc.id;
                                 convItem.innerHTML = `
-                                    <div class="conversation-name">${otherUser.username}</div>
+                                    <div class="conversation-name">${otherUser.username}${isConversationPinned(convData) ? '<span class="conversation-pin"><i data-lucide="pin" style="width: 14px; height: 14px;"></i></span>' : ''}</div>
                                     <div class="conversation-id">ID: ${otherUserID}</div>
                                 `;
                                 convItem.addEventListener('click', () => {
@@ -2315,7 +2618,9 @@
                                     conversationID: doc.id,
                                     otherUserID,
                                     otherUsername: otherUser.username,
-                                    blockedBy: convData.blockedBy || []
+                                    blockedBy: convData.blockedBy || [],
+                                    pinnedBy: convData.pinnedBy || [],
+                                    ttlHours: convData.ttlHours || 24
                                 });
 
                                 if (currentConversationID === doc.id) {
@@ -2350,7 +2655,8 @@
                         conversationKey: conversationKey,
                         createdAt: existingConversation.data().createdAt || new Date(),
                         lastMessage: existingConversation.data().lastMessage || null,
-                        lastMessageTime: existingConversation.data().lastMessageTime || new Date()
+                        lastMessageTime: existingConversation.data().lastMessageTime || new Date(),
+                        ttlHours: existingConversation.data().ttlHours || 24
                     }, { merge: true });
                     conversationID = existingConversation.id;
                 } else {
@@ -2360,7 +2666,11 @@
                         conversationKey: conversationKey,
                         createdAt: new Date(),
                         lastMessage: null,
-                        lastMessageTime: new Date()
+                        lastMessageTime: new Date(),
+                        ttlHours: 24,
+                        blockedBy: [],
+                        pinnedBy: [],
+                        typingBy: []
                     });
                     conversationID = conversationKey;
                 }
@@ -2383,6 +2693,8 @@
             currentChatUser = otherUsername;
             currentConversationID = conversationID;
             currentConversationKey = getConversationKey(currentUserID, otherUserID);
+            currentChatSearchTerm = '';
+            clearReplyDraft();
 
             // Atualiza cabeçalho
             document.getElementById('chatHeader').style.display = 'flex';
@@ -2422,12 +2734,143 @@
             loadMessages(conversationID, otherUserID);
         }
 
+        function renderCurrentMessages(conversationID, otherUserID) {
+            const messagesContainer = document.getElementById('messagesContainer');
+            const searchTerm = currentChatSearchTerm.trim().toLowerCase();
+            messagesContainer.innerHTML = '';
+
+            const visibleMessages = currentMessagesCache.filter((message) => {
+                if (!searchTerm) return true;
+                const searchableText = [
+                    message.displayText || '',
+                    message.data.fileName || '',
+                    message.data.replyTo?.text || ''
+                ].join(' ').toLowerCase();
+                return searchableText.includes(searchTerm);
+            });
+
+            for (const message of visibleMessages) {
+                const { id, data: msg, displayText } = message;
+                const isOwnMessage = msg.sender === currentUserID;
+                const isFirstRenderForMessage = !notifiedMessageIds.has(id);
+
+                const msgGroup = document.createElement('div');
+                msgGroup.className = `message-group ${isOwnMessage ? 'sent' : ''}`;
+
+                const bubble = document.createElement('div');
+                bubble.className = `message-bubble ${isOwnMessage ? 'sent' : 'received'}`;
+
+                if (searchTerm) {
+                    bubble.classList.add('message-match');
+                }
+
+                if (msg.replyTo?.text) {
+                    const replyBlock = document.createElement('div');
+                    replyBlock.className = 'message-reply';
+                    replyBlock.innerHTML = `
+                        <span class="message-reply-author">${msg.replyTo.senderID === currentUserID ? 'Voce' : (msg.replyTo.senderName || currentChatUser)}</span>
+                        <div class="message-reply-preview">${msg.replyTo.text}</div>
+                    `;
+                    bubble.appendChild(replyBlock);
+                }
+
+                if (msg.type === 'text') {
+                    const textNode = document.createElement('div');
+                    textNode.textContent = displayText;
+                    bubble.appendChild(textNode);
+                } else if (msg.type === 'image') {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'message-image-wrapper';
+                    const img = document.createElement('img');
+                    img.src = msg.url;
+                    img.className = 'message-image loading';
+                    const status = document.createElement('div');
+                    status.className = 'image-status';
+                    status.textContent = 'Baixando imagem...';
+                    img.addEventListener('load', () => {
+                        img.classList.remove('loading');
+                        status.remove();
+                    });
+                    img.addEventListener('error', () => {
+                        status.textContent = 'Erro ao carregar imagem';
+                    });
+                    img.addEventListener('click', () => openImageModal(msg.url));
+                    wrapper.appendChild(img);
+                    wrapper.appendChild(status);
+                    bubble.appendChild(wrapper);
+                } else if (msg.type === 'file') {
+                    const fileDiv = document.createElement('div');
+                    fileDiv.className = 'message-file';
+                    fileDiv.innerHTML = `
+                        <i data-lucide="file" class="file-icon"></i>
+                        <div class="file-name">${msg.fileName}</div>
+                    `;
+                    bubble.appendChild(fileDiv);
+                    bubble.style.cursor = 'pointer';
+                    bubble.addEventListener('click', () => {
+                        const a = document.createElement('a');
+                        a.href = msg.url;
+                        a.download = msg.fileName;
+                        a.click();
+                    });
+                } else if (msg.type === 'audio') {
+                    const audioWrapper = document.createElement('div');
+                    audioWrapper.className = 'message-audio';
+                    const audio = document.createElement('audio');
+                    audio.controls = true;
+                    audio.preload = 'metadata';
+                    audio.src = msg.url;
+                    audioWrapper.appendChild(audio);
+                    bubble.appendChild(audioWrapper);
+                }
+
+                attachLongPressHandlers(bubble, {
+                    conversationID,
+                    messageID: id,
+                    otherUserID,
+                    text: displayText || msg.fileName || 'Mensagem',
+                    isOwn: isOwnMessage,
+                    senderID: msg.sender,
+                    authorName: isOwnMessage ? currentUser : currentChatUser
+                });
+
+                if (!isOwnMessage && isFirstRenderForMessage) {
+                    const notificationBody = msg.type === 'text'
+                        ? displayText
+                        : (msg.type === 'image'
+                            ? 'Enviou uma imagem'
+                            : (msg.type === 'audio' ? 'Enviou um audio' : `Enviou ${msg.fileName || 'um arquivo'}`));
+
+                    if (document.hidden || currentChatUserID !== otherUserID) {
+                        notifyForegroundMessage(currentChatUser || 'Nova mensagem', notificationBody);
+                    }
+                }
+
+                const timestamp = document.createElement('div');
+                timestamp.className = 'message-timestamp';
+                const statusMark = isOwnMessage
+                    ? `<span class="message-status">${msg.read ? '✓✓' : '✓'}</span>`
+                    : '';
+                timestamp.innerHTML = `${formatTime(msg.timestamp.toDate())}${msg.edited ? ' • editada' : ''}${statusMark}`;
+
+                msgGroup.appendChild(bubble);
+                msgGroup.appendChild(timestamp);
+                messagesContainer.appendChild(msgGroup);
+                notifiedMessageIds.add(id);
+            }
+
+            renderPendingMediaMessages();
+            lucide.createIcons();
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
         /**
          * Carrega mensagens da conversa
          */
         function loadMessages(conversationID, otherUserID) {
             const messagesContainer = document.getElementById('messagesContainer');
             messagesContainer.innerHTML = '';
+            currentMessagesCache = [];
             const conversationKey = getConversationKey(currentUserID, otherUserID);
 
             // Desinscreve do anterior se existir
@@ -2447,7 +2890,8 @@
                         const isFirstRenderForMessage = !notifiedMessageIds.has(doc.id);
 
                         // Verifica se mensagem expirou
-                        if (isMessageExpired(msg.timestamp.toDate())) {
+                        const expiresAt = getMessageExpirationDate(msg);
+                        if (expiresAt && isMessageExpired(expiresAt)) {
                             // Deleta mensagem expirada
                             await doc.ref.delete();
                             continue;
@@ -2460,28 +2904,38 @@
                             displayText = await decryptMessage(msg.text, conversationEncryptionKey, msg.iv);
                         }
 
+                        currentMessagesCache.push({
+                            id: doc.id,
+                            data: msg,
+                            displayText
+                        });
+
                         const msgGroup = document.createElement('div');
                         msgGroup.className = `message-group ${msg.sender === currentUserID ? 'sent' : ''}`;
 
                         const bubble = document.createElement('div');
                         bubble.className = `message-bubble ${msg.sender === currentUserID ? 'sent' : 'received'}`;
 
+                        if (msg.replyTo?.text) {
+                            const replyBlock = document.createElement('div');
+                            replyBlock.className = 'message-reply';
+                            replyBlock.innerHTML = `
+                                <span class="message-reply-author">${msg.replyTo.senderID === currentUserID ? 'Voce' : (msg.replyTo.senderName || currentChatUser)}</span>
+                                <div class="message-reply-preview">${msg.replyTo.text}</div>
+                            `;
+                            bubble.appendChild(replyBlock);
+                        }
+
                         if (msg.type === 'text') {
-                            bubble.textContent = displayText;
-                            if (isOwnMessage) {
-                                attachLongPressHandlers(bubble, {
-                                    conversationID,
-                                    messageID: doc.id,
-                                    otherUserID,
-                                    text: displayText
-                                });
-                            }
+                            const textNode = document.createElement('div');
+                            textNode.textContent = displayText;
+                            bubble.appendChild(textNode);
                         } else if (msg.type === 'image') {
                             const wrapper = document.createElement('div');
                             wrapper.className = 'message-image-wrapper';
 
                             const img = document.createElement('img');
-                            img.src = msg.url;
+                            img.src = msg.inlineData || msg.url;
                             img.className = 'message-image loading';
 
                             const status = document.createElement('div');
@@ -2495,7 +2949,7 @@
                             img.addEventListener('error', () => {
                                 status.textContent = 'Erro ao carregar imagem';
                             });
-                            img.addEventListener('click', () => openImageModal(msg.url));
+                            img.addEventListener('click', () => openImageModal(msg.inlineData || msg.url));
 
                             wrapper.appendChild(img);
                             wrapper.appendChild(status);
@@ -2511,7 +2965,7 @@
                             bubble.style.cursor = 'pointer';
                             bubble.addEventListener('click', () => {
                                 const a = document.createElement('a');
-                                a.href = msg.url;
+                                a.href = msg.inlineData || msg.url;
                                 a.download = msg.fileName;
                                 a.click();
                             });
@@ -2522,19 +2976,37 @@
                             const audio = document.createElement('audio');
                             audio.controls = true;
                             audio.preload = 'metadata';
-                            audio.src = msg.url;
+                            audio.src = msg.inlineData || msg.url;
                             audioWrapper.appendChild(audio);
                             bubble.appendChild(audioWrapper);
                         }
 
+                        attachLongPressHandlers(bubble, {
+                            conversationID,
+                            messageID: doc.id,
+                            otherUserID,
+                            text: displayText || msg.fileName || 'Mensagem',
+                            isOwn: isOwnMessage,
+                            senderID: msg.sender,
+                            authorName: isOwnMessage ? currentUser : currentChatUser
+                        });
+
                         if (!isOwnMessage && isFirstRenderForMessage) {
                             const notificationBody = msg.type === 'text'
                                 ? displayText
-                                : (msg.type === 'image' ? 'Enviou uma imagem' : `Enviou ${msg.fileName || 'um arquivo'}`);
+                                : (msg.type === 'image'
+                                    ? 'Enviou uma imagem'
+                                    : (msg.type === 'audio' ? 'Enviou um audio' : `Enviou ${msg.fileName || 'um arquivo'}`));
 
                             if (document.hidden || currentChatUserID !== otherUserID) {
                                 notifyForegroundMessage(currentChatUser || 'Nova mensagem', notificationBody);
                             }
+                        }
+
+                        if (!isOwnMessage && !msg.read) {
+                            doc.ref.update({ read: true }).catch((error) => {
+                                console.error('Erro ao marcar mensagem como lida:', error);
+                            });
                         }
 
                         const timestamp = document.createElement('div');
@@ -2543,6 +3015,9 @@
 
                         msgGroup.appendChild(bubble);
                         msgGroup.appendChild(timestamp);
+                        if (isOwnMessage) {
+                            timestamp.innerHTML = `${formatTime(msg.timestamp.toDate())}${msg.edited ? ' • editada' : ''}<span class="message-status">${msg.read ? '✓✓' : '✓'}</span>`;
+                        }
                         messagesContainer.appendChild(msgGroup);
                         notifiedMessageIds.add(doc.id);
                         lucide.createIcons();
@@ -2577,8 +3052,10 @@
                     currentConversationID,
                     currentConversationKey,
                     currentChatUserID,
-                    text
+                    text,
+                    replyDraft
                 );
+                clearReplyDraft();
                 return;
                 // Criptografa mensagem
                 const conversationEncryptionKey = await generateEncryptionKey(currentConversationKey);
@@ -2624,49 +3101,45 @@
             const tempId = addPendingMediaMessage(file);
 
             try {
-                const storageRef = storage.ref();
-                const fileRef = storageRef.child(
-                    `chats/${currentUserID}_${currentChatUserID}/${Date.now()}_${file.name}`
-                );
+                const isImage = file.type.startsWith('image/');
+                if (!isImage) {
+                    throw new Error('Sem Storage, apenas imagens estao habilitadas no momento');
+                }
 
-                const uploadTask = fileRef.put(file);
-                await new Promise((resolve, reject) => {
-                    uploadTask.on(
-                        'state_changed',
-                        (snapshot) => {
-                            const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-                            updatePendingMediaMessage(tempId, {
-                                progress,
-                                status: progress >= 100 ? 'Processando...' : 'Enviando...'
-                            });
-                        },
-                        (error) => reject(error),
-                        () => resolve()
-                    );
+                updatePendingMediaMessage(tempId, {
+                    progress: 35,
+                    status: 'Compactando...'
                 });
 
-                const downloadURL = await fileRef.getDownloadURL();
+                const preparedImage = await compressImageForFirestore(file);
+                updatePendingMediaMessage(tempId, {
+                    progress: 85,
+                    status: 'Salvando...'
+                });
 
-                // Determine tipo
-                const isImage = file.type.startsWith('image/');
-                const messageType = isImage ? 'image' : 'file';
+                const timestamp = new Date();
+                const expiresAt = new Date(timestamp);
+                expiresAt.setHours(expiresAt.getHours() + getConversationTtlHours());
 
                 await db.collection('conversations')
                     .doc(currentConversationID)
                     .collection('messages')
                     .add({
-                        url: downloadURL,
-                        type: messageType,
+                        inlineData: preparedImage.dataUrl,
+                        type: 'image',
                         sender: currentUserID,
                         recipient: currentChatUserID,
-                        timestamp: new Date(),
-                        fileName: file.name,
-                        read: false
+                        timestamp,
+                        expiresAt,
+                        fileName: preparedImage.fileName,
+                        read: false,
+                        delivered: true
                     });
 
                 await db.collection('conversations').doc(currentConversationID).update({
-                    lastMessage: file.name,
-                    lastMessageTime: new Date()
+                    lastMessage: preparedImage.fileName,
+                    lastMessageTime: timestamp,
+                    typingBy: firebase.firestore.FieldValue.arrayRemove(currentUserID)
                 });
 
                 removePendingMediaMessage(tempId);
@@ -2690,30 +3163,30 @@
             try {
                 const extension = audioBlob.type.includes('ogg') ? 'ogg' : 'webm';
                 const fileName = `audio-${Date.now()}.${extension}`;
-                const storageRef = storage.ref();
-                const fileRef = storageRef.child(
-                    `chats/${currentUserID}_${currentChatUserID}/${fileName}`
-                );
-
-                await fileRef.put(audioBlob, { contentType: audioBlob.type || 'audio/webm' });
-                const downloadURL = await fileRef.getDownloadURL();
+                const timestamp = new Date();
+                const expiresAt = new Date(timestamp);
+                expiresAt.setHours(expiresAt.getHours() + getConversationTtlHours());
+                const inlineAudio = await prepareAudioForFirestore(audioBlob);
 
                 await db.collection('conversations')
                     .doc(currentConversationID)
                     .collection('messages')
                     .add({
-                        url: downloadURL,
+                        inlineData: inlineAudio,
                         type: 'audio',
                         sender: currentUserID,
                         recipient: currentChatUserID,
-                        timestamp: new Date(),
+                        timestamp,
+                        expiresAt,
                         fileName,
-                        read: false
+                        read: false,
+                        delivered: true
                     });
 
                 await db.collection('conversations').doc(currentConversationID).update({
                     lastMessage: 'Audio',
-                    lastMessageTime: new Date()
+                    lastMessageTime: timestamp,
+                    typingBy: firebase.firestore.FieldValue.arrayRemove(currentUserID)
                 });
 
                 showToast('Audio enviado!', 'success');
@@ -2818,10 +3291,48 @@
         document.getElementById('messageInput').addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+            if (!currentConversationID || this.disabled) return;
+            if (typingDebounceTimeout) {
+                clearTimeout(typingDebounceTimeout);
+            }
+            typingDebounceTimeout = setTimeout(() => {
+                setTypingState(this.value.trim().length > 0).catch((error) => {
+                    console.error('Erro ao atualizar digitacao:', error);
+                });
+                scheduleTypingRelease();
+            }, 120);
         });
 
         // Botão enviar
         document.getElementById('sendButton').addEventListener('click', sendTextMessage);
+        document.getElementById('cancelReplyButton').addEventListener('click', clearReplyDraft);
+        document.getElementById('chatSearchButton').addEventListener('click', () => {
+            if (!currentConversationID) return;
+
+            const term = prompt('Buscar no chat:', currentChatSearchTerm);
+            if (term === null) return;
+
+            currentChatSearchTerm = term.trim();
+
+            document.querySelectorAll('#messagesContainer .message-bubble').forEach((bubble) => {
+                bubble.classList.remove('message-match');
+                if (currentChatSearchTerm && bubble.textContent.toLowerCase().includes(currentChatSearchTerm.toLowerCase())) {
+                    bubble.classList.add('message-match');
+                }
+            });
+
+            if (!currentChatSearchTerm) return;
+
+            const matchedGroup = Array.from(document.querySelectorAll('#messagesContainer .message-group')).find((group) =>
+                group.textContent.toLowerCase().includes(currentChatSearchTerm.toLowerCase())
+            );
+
+            if (matchedGroup) {
+                matchedGroup.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+                showToast('Nada encontrado no chat', 'info');
+            }
+        });
         document.getElementById('plusButton').addEventListener('click', (e) => {
             e.stopPropagation();
             toggleAttachmentMenu();
@@ -2908,6 +3419,13 @@
             const copied = await copyTextToClipboard(selectedMessageContext.text);
             closeMessageActionModal();
             showToast(copied ? 'Mensagem copiada' : 'Nao foi possivel copiar', copied ? 'success' : 'error');
+        });
+
+        document.getElementById('replyMessageButton').addEventListener('click', () => {
+            if (!selectedMessageContext) return;
+            setReplyDraft(selectedMessageContext);
+            closeMessageActionModal();
+            document.getElementById('messageInput').focus();
         });
 
         document.getElementById('deleteMessageButton').addEventListener('click', async () => {
@@ -3053,6 +3571,46 @@
             } catch (error) {
                 console.error('Erro ao limpar conversa:', error);
                 showToast('Erro ao limpar conversa', 'error');
+            }
+        });
+
+        document.getElementById('togglePinConversationButton').addEventListener('click', async () => {
+            if (!selectedConversationContext) return;
+
+            const { conversationID, pinnedBy = [] } = selectedConversationContext;
+            const isPinned = pinnedBy.includes(currentUserID);
+            closeConversationActionModal();
+
+            try {
+                await setConversationPinned(conversationID, !isPinned);
+                showToast(isPinned ? 'Conversa desafixada' : 'Conversa fixada', 'success');
+            } catch (error) {
+                console.error('Erro ao atualizar conversa fixa:', error);
+                showToast('Erro ao atualizar conversa fixa', 'error');
+            }
+        });
+
+        document.getElementById('changeConversationTtlButton').addEventListener('click', async () => {
+            if (!selectedConversationContext) return;
+
+            const { conversationID, ttlHours = 24 } = selectedConversationContext;
+            closeConversationActionModal();
+            const value = prompt('Tempo em horas para as mensagens sumirem:', String(ttlHours));
+
+            if (value === null) return;
+
+            const parsed = Number(value.trim());
+            if (!Number.isFinite(parsed) || parsed <= 0) {
+                showToast('Digite um numero de horas valido', 'error');
+                return;
+            }
+
+            try {
+                await setConversationTtl(conversationID, parsed);
+                showToast(`Mensagens configuradas para ${parsed}h`, 'success');
+            } catch (error) {
+                console.error('Erro ao atualizar tempo das mensagens:', error);
+                showToast('Erro ao atualizar tempo das mensagens', 'error');
             }
         });
 
