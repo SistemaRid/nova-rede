@@ -532,9 +532,11 @@
         .message-image-wrapper {
             position: relative;
             margin-top: 8px;
-            border-radius: 12px;
+            border-radius: 18px;
             overflow: hidden;
-            background: rgba(255, 255, 255, 0.06);
+            background: transparent;
+            display: inline-block;
+            line-height: 0;
         }
 
         .image-status {
@@ -549,6 +551,31 @@
             backdrop-filter: blur(10px);
         }
 
+        .image-download-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 34px;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.5);
+            color: var(--text-white);
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            z-index: 2;
+        }
+
+        .message-bubble.image-only {
+            padding: 0;
+            background: transparent;
+            border: none;
+            box-shadow: none;
+        }
+
         .message-file {
             display: flex;
             align-items: center;
@@ -557,6 +584,28 @@
             padding: 10px 12px;
             border-radius: 10px;
             margin-top: 8px;
+        }
+
+        .view-once-card {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            min-width: 200px;
+            min-height: 120px;
+            padding: 18px 16px;
+            margin-top: 8px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: inherit;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .view-once-card.opened {
+            opacity: 0.7;
+            cursor: default;
         }
 
         .message-audio {
@@ -595,6 +644,14 @@
             width: 100%;
             max-width: 100%;
             position: relative;
+        }
+
+        .composer-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            min-width: 0;
         }
 
         .input-group {
@@ -1209,6 +1266,10 @@
                 gap: 10px;
             }
 
+            .composer-row {
+                gap: 10px;
+            }
+
             .input-group {
                 gap: 6px;
             }
@@ -1274,6 +1335,10 @@
 
             .input-area {
                 padding: 10px 12px calc(env(safe-area-inset-bottom, 0px) + 10px);
+                gap: 8px;
+            }
+
+            .composer-row {
                 gap: 8px;
             }
 
@@ -1343,8 +1408,8 @@
       </div><button class="logout-btn" id="logoutButton" title="Sair"> <i data-lucide="log-out" style="width: 18px; height: 18px;"></i> </button>
      </div>
     </div>
-    <div class="search-container">
-     <input type="text" class="search-input" id="searchInput" placeholder="Buscar por ID...">
+     <div class="search-container">
+      <input type="text" class="search-input" id="searchInput" placeholder="Buscar por nome ou ID...">
     </div>
     <div class="conversations-list" id="conversationsList">
      <div class="empty-state">
@@ -1374,30 +1439,32 @@
      <!-- Mensagens aparecem aqui -->
     </div>
      <div class="input-area" id="inputArea" style="display: none;">
-      <div class="reply-banner" id="replyBanner">
+     <div class="reply-banner" id="replyBanner">
        <div class="reply-banner-content">
         <div class="reply-banner-label" id="replyBannerLabel">Respondendo</div>
         <div class="reply-banner-text" id="replyBannerText"></div>
        </div>
        <button class="icon-button" id="cancelReplyButton" title="Cancelar resposta"> <i data-lucide="x" style="width: 18px; height: 18px;"></i> </button>
       </div>
-      <div class="input-group">
-      <div class="composer-tools">
-       <button class="icon-button" id="plusButton" title="Mais opcoes"> <i data-lucide="plus" style="width: 18px; height: 18px;"></i> </button>
-       <div class="attachment-menu" id="attachmentMenu">
-        <button class="attachment-option" id="attachButton" title="Anexar arquivo"> <i data-lucide="paperclip"></i> <span>Arquivo</span> </button>
-        <button class="attachment-option" id="galleryButton" title="Foto da galeria"> <i data-lucide="image"></i> <span>Galeria</span> </button>
-        <button class="attachment-option" id="cameraButton" title="Tirar foto"> <i data-lucide="camera"></i> <span>Camera</span> </button>
+      <div class="composer-row">
+       <div class="input-group">
+        <div class="composer-tools">
+         <button class="icon-button" id="plusButton" title="Mais opcoes"> <i data-lucide="plus" style="width: 18px; height: 18px;"></i> </button>
+         <div class="attachment-menu" id="attachmentMenu">
+          <button class="attachment-option" id="attachButton" title="Anexar arquivo"> <i data-lucide="paperclip"></i> <span>Arquivo</span> </button>
+          <button class="attachment-option" id="galleryButton" title="Foto da galeria"> <i data-lucide="image"></i> <span>Galeria</span> </button>
+          <button class="attachment-option" id="cameraButton" title="Tirar foto"> <i data-lucide="camera"></i> <span>Camera</span> </button>
+         </div>
+        </div><textarea class="message-input" id="messageInput" placeholder="Digite sua mensagem..." rows="1"></textarea>
        </div>
-      </div><textarea class="message-input" id="messageInput" placeholder="Digite sua mensagem..." rows="1"></textarea>
+       <div class="recording-indicator" id="recordingIndicator">
+        <span class="recording-dot"></span>
+        <span id="recordingStatusText">Gravando audio...</span>
+       </div>
+       <button class="icon-button record-button" id="recordButton" title="Segure para gravar"> <i data-lucide="mic" style="width: 18px; height: 18px;"></i> </button>
+       <button class="send-button" id="sendButton" title="Enviar"> <i data-lucide="send" style="width: 18px; height: 18px;"></i> </button>
+      </div>
      </div>
-     <div class="recording-indicator" id="recordingIndicator">
-      <span class="recording-dot"></span>
-      <span id="recordingStatusText">Gravando audio...</span>
-     </div>
-     <button class="icon-button record-button" id="recordButton" title="Segure para gravar"> <i data-lucide="mic" style="width: 18px; height: 18px;"></i> </button>
-     <button class="send-button" id="sendButton" title="Enviar"> <i data-lucide="send" style="width: 18px; height: 18px;"></i> </button>
-    </div>
     <div id="noChatSelected" style="display: none;">
      <div class="empty-state">
       <i data-lucide="lock" class="empty-state-icon"></i>
@@ -1857,6 +1924,10 @@
             }
 
             return dataUrl;
+        }
+
+        function chooseImageDeliveryMode() {
+            return confirm('Deseja enviar esta foto como visualizacao unica?\n\nOK = visualizacao unica\nCancelar = foto normal');
         }
 
         async function getConversationByUsers(otherUserID) {
@@ -2530,6 +2601,50 @@
         /**
          * Inicia conversa com usuário encontrado
          */
+        let searchByNameDebounceTimeout = null;
+
+        async function findUserByName(searchTerm) {
+            const normalizedTerm = searchTerm.trim().toLowerCase();
+            if (!normalizedTerm || /^\d+$/.test(normalizedTerm)) return null;
+
+            const allUsers = await db.collection('users').get();
+            const matchedDoc = allUsers.docs.find((doc) => {
+                const data = doc.data();
+                return data.userID !== currentUserID &&
+                    typeof data.username === 'string' &&
+                    data.username.toLowerCase().includes(normalizedTerm);
+            });
+
+            return matchedDoc ? matchedDoc.data() : null;
+        }
+
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            const searchTerm = e.target.value.trim();
+
+            if (searchByNameDebounceTimeout) {
+                clearTimeout(searchByNameDebounceTimeout);
+            }
+
+            if (!searchTerm || /^\d+$/.test(searchTerm) || searchTerm.length < 2) {
+                return;
+            }
+
+            searchByNameDebounceTimeout = setTimeout(async () => {
+                try {
+                    const userData = await findUserByName(searchTerm);
+                    if (!userData) return;
+
+                    document.getElementById('foundUsername').textContent = userData.username;
+                    document.getElementById('foundUserID').textContent = userData.userID;
+                    document.getElementById('searchResultModal').classList.add('active');
+                    currentChatUserID = userData.userID;
+                    currentChatUser = userData.username;
+                } catch (error) {
+                    console.error('Erro ao buscar usuÃ¡rio por nome:', error);
+                }
+            }, 260);
+        });
+
         document.getElementById('startChatButton').addEventListener('click', () => {
             document.getElementById('searchResultModal').classList.remove('active');
             document.getElementById('searchInput').value = '';
@@ -2931,29 +3046,75 @@
                             textNode.textContent = displayText;
                             bubble.appendChild(textNode);
                         } else if (msg.type === 'image') {
-                            const wrapper = document.createElement('div');
-                            wrapper.className = 'message-image-wrapper';
+                            const isViewOnce = msg.viewOnce === true;
+                            const alreadyOpened = Array.isArray(msg.openedBy) && msg.openedBy.includes(currentUserID);
 
-                            const img = document.createElement('img');
-                            img.src = msg.inlineData || msg.url;
-                            img.className = 'message-image loading';
+                            if (isViewOnce && !isOwnMessage) {
+                                const viewOnceCard = document.createElement('div');
+                                viewOnceCard.className = `view-once-card ${alreadyOpened ? 'opened' : ''}`;
+                                viewOnceCard.innerHTML = alreadyOpened
+                                    ? '<i data-lucide="check-circle"></i><span>Foto ja aberta</span>'
+                                    : '<i data-lucide="image"></i><span>Abrir foto de visualizacao unica</span>';
 
-                            const status = document.createElement('div');
-                            status.className = 'image-status';
-                            status.textContent = 'Baixando imagem...';
+                                if (!alreadyOpened) {
+                                    viewOnceCard.addEventListener('click', async () => {
+                                        openImageModal(msg.inlineData || msg.url);
+                                        try {
+                                            await doc.ref.set({
+                                                openedBy: firebase.firestore.FieldValue.arrayUnion(currentUserID)
+                                            }, { merge: true });
+                                        } catch (error) {
+                                            console.error('Erro ao marcar foto como aberta:', error);
+                                        }
+                                    });
+                                }
 
-                            img.addEventListener('load', () => {
-                                img.classList.remove('loading');
-                                status.remove();
-                            });
-                            img.addEventListener('error', () => {
-                                status.textContent = 'Erro ao carregar imagem';
-                            });
-                            img.addEventListener('click', () => openImageModal(msg.inlineData || msg.url));
+                                bubble.appendChild(viewOnceCard);
+                            } else if (isViewOnce && isOwnMessage) {
+                                const viewOnceCard = document.createElement('div');
+                                viewOnceCard.className = 'view-once-card';
+                                viewOnceCard.innerHTML = '<i data-lucide="image"></i><span>Foto de visualizacao unica</span>';
+                                viewOnceCard.addEventListener('click', () => openImageModal(msg.inlineData || msg.url));
+                                bubble.appendChild(viewOnceCard);
+                            } else {
+                                const wrapper = document.createElement('div');
+                                wrapper.className = 'message-image-wrapper';
+                                bubble.classList.add('image-only');
 
-                            wrapper.appendChild(img);
-                            wrapper.appendChild(status);
-                            bubble.appendChild(wrapper);
+                                const img = document.createElement('img');
+                                img.src = msg.inlineData || msg.url;
+                                img.className = 'message-image loading';
+
+                                const downloadButton = document.createElement('button');
+                                downloadButton.className = 'image-download-button';
+                                downloadButton.title = 'Baixar foto';
+                                downloadButton.innerHTML = '<i data-lucide="download" style="width: 16px; height: 16px;"></i>';
+                                downloadButton.addEventListener('click', (event) => {
+                                    event.stopPropagation();
+                                    const a = document.createElement('a');
+                                    a.href = msg.inlineData || msg.url;
+                                    a.download = msg.fileName || 'foto.jpg';
+                                    a.click();
+                                });
+
+                                const status = document.createElement('div');
+                                status.className = 'image-status';
+                                status.textContent = 'Baixando imagem...';
+
+                                img.addEventListener('load', () => {
+                                    img.classList.remove('loading');
+                                    status.remove();
+                                });
+                                img.addEventListener('error', () => {
+                                    status.textContent = 'Erro ao carregar imagem';
+                                });
+                                img.addEventListener('click', () => openImageModal(msg.inlineData || msg.url));
+
+                                wrapper.appendChild(downloadButton);
+                                wrapper.appendChild(img);
+                                wrapper.appendChild(status);
+                                bubble.appendChild(wrapper);
+                            }
                         } else if (msg.type === 'file') {
                             const fileDiv = document.createElement('div');
                             fileDiv.className = 'message-file';
@@ -3089,7 +3250,7 @@
         /**
          * Envia arquivo
          */
-        async function sendFile(file) {
+        async function sendFile(file, options = {}) {
             if (!currentChatUserID || !file || !currentConversationID) return;
             if (document.getElementById('messageInput').disabled) {
                 showToast('Conversa bloqueada', 'info');
@@ -3133,11 +3294,13 @@
                         expiresAt,
                         fileName: preparedImage.fileName,
                         read: false,
-                        delivered: true
+                        delivered: true,
+                        viewOnce: options.viewOnce === true,
+                        openedBy: []
                     });
 
                 await db.collection('conversations').doc(currentConversationID).update({
-                    lastMessage: preparedImage.fileName,
+                    lastMessage: options.viewOnce === true ? 'Foto de visualizacao unica' : preparedImage.fileName,
                     lastMessageTime: timestamp,
                     typingBy: firebase.firestore.FieldValue.arrayRemove(currentUserID)
                 });
@@ -3376,7 +3539,9 @@
 
         document.getElementById('galleryInput').addEventListener('change', (e) => {
             if (e.target.files[0]) {
-                sendFile(e.target.files[0]);
+                sendFile(e.target.files[0], {
+                    viewOnce: chooseImageDeliveryMode()
+                });
                 e.target.value = '';
             }
         });
@@ -3389,7 +3554,9 @@
 
         document.getElementById('cameraInput').addEventListener('change', (e) => {
             if (e.target.files[0]) {
-                sendFile(e.target.files[0]);
+                sendFile(e.target.files[0], {
+                    viewOnce: chooseImageDeliveryMode()
+                });
                 e.target.value = '';
             }
         });
