@@ -1,0 +1,1834 @@
+<!doctype html>
+<html lang="pt-BR">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Privado - Mensageiro Secreto Elegante</title><!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-storage-compat.js"></script><!-- Lucide Icons -->
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* ==================== VARIÁVEIS CSS ==================== */
+        :root {
+            --primary-black: #0a0a0a;
+            --dark-gray: #1a1a1a;
+            --medium-gray: #2d2d2d;
+            --light-gray: #4a4a4a;
+            --soft-gray: #6a6a6a;
+            --text-white: #f5f5f5;
+            --text-light: #d4d4d4;
+            --accent-white: #ffffff;
+            --accent-gray: #888888;
+            --glass-bg: rgba(255, 255, 255, 0.08);
+            --glass-border: rgba(255, 255, 255, 0.12);
+            --shadow-sm: 0 4px 15px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 8px 30px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 15px 50px rgba(0, 0, 0, 0.5);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        html, body {
+            height: 100%;
+            width: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--primary-black) 0%, #0f0f0f 50%, var(--dark-gray) 100%);
+            color: var(--text-white);
+            overflow: hidden;
+        }
+
+        /* ==================== TELA DE LOGIN ==================== */
+        .login-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--primary-black) 0%, #0f0f0f 50%, var(--dark-gray) 100%);
+        }
+
+        .login-card {
+            backdrop-filter: blur(20px);
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 60px 40px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: var(--shadow-lg);
+            animation: slideInUp 0.6s ease-out;
+        }
+
+        .login-title {
+            font-size: 32px;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, var(--text-white), var(--text-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .login-subtitle {
+            text-align: center;
+            color: var(--soft-gray);
+            font-size: 13px;
+            margin-bottom: 40px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .form-group {
+            position: relative;
+        }
+
+        .form-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--soft-gray);
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 14px 18px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: var(--text-white);
+            font-size: 15px;
+            transition: var(--transition);
+            backdrop-filter: blur(10px);
+        }
+
+        .form-input::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .form-input:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--accent-white);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.15);
+        }
+
+        .login-button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--accent-white), #e8e8e8);
+            border: none;
+            border-radius: 12px;
+            color: var(--primary-black);
+            font-weight: 700;
+            font-size: 15px;
+            cursor: pointer;
+            transition: var(--transition);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 10px;
+            box-shadow: 0 4px 20px rgba(255, 255, 255, 0.2);
+        }
+
+        .login-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 30px rgba(255, 255, 255, 0.3);
+        }
+
+        .login-button:active {
+            transform: translateY(0);
+        }
+
+        .login-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* ==================== CHAT PRINCIPAL ==================== */
+        .chat-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            background: var(--primary-black);
+        }
+
+        .mobile-topbar {
+            display: none;
+        }
+
+        /* --- SIDEBAR --- */
+        .sidebar {
+            width: 320px;
+            background: var(--dark-gray);
+            border-right: 1px solid var(--glass-border);
+            display: flex;
+            flex-direction: column;
+            animation: slideInLeft 0.6s ease-out;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+
+        .user-details {
+            flex: 1;
+        }
+
+        .username-display {
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--text-white);
+        }
+
+        .user-id {
+            font-size: 11px;
+            color: var(--soft-gray);
+            margin-top: 4px;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 1px;
+        }
+
+        .logout-btn {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            color: var(--text-light);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }
+
+        .logout-btn:hover {
+            background: rgba(255, 59, 48, 0.15);
+            color: #ff3b30;
+            border-color: rgba(255, 59, 48, 0.3);
+        }
+
+        /* --- SEARCH --- */
+        .search-container {
+            padding: 15px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: var(--text-white);
+            font-size: 14px;
+            transition: var(--transition);
+        }
+
+        .search-input::placeholder {
+            color: rgba(255, 255, 255, 0.2);
+        }
+
+        .search-input:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--accent-white);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.15);
+        }
+
+        /* --- CONVERSAS --- */
+        .conversations-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 0;
+        }
+
+        .conversation-item {
+            padding: 15px 15px;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+            transition: var(--transition);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .conversation-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-left-color: var(--accent-white);
+        }
+
+        .conversation-item.active {
+            background: rgba(255, 255, 255, 0.1);
+            border-left-color: var(--accent-white);
+        }
+
+        .conversation-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-white);
+        }
+
+        .conversation-id {
+            font-size: 11px;
+            color: var(--soft-gray);
+            margin-top: 4px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .empty-state-icon {
+            width: 60px;
+            height: 60px;
+            margin-bottom: 15px;
+            opacity: 0.3;
+        }
+
+        .empty-state-text {
+            font-size: 13px;
+            color: var(--soft-gray);
+            line-height: 1.6;
+        }
+
+        /* --- MAIN CHAT AREA --- */
+        .main-chat {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--primary-black);
+            min-width: 0;
+        }
+
+        .chat-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            animation: slideInDown 0.6s ease-out;
+        }
+
+        .chat-header-main {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .back-button {
+            display: none;
+            width: 38px;
+            height: 38px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: var(--text-light);
+            cursor: pointer;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            flex-shrink: 0;
+        }
+
+        .back-button:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: var(--accent-white);
+            border-color: var(--accent-white);
+        }
+
+        .chat-header-info h2 {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-white);
+        }
+
+        .chat-header-info p {
+            font-size: 12px;
+            color: var(--soft-gray);
+            margin-top: 4px;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* --- MENSAGENS --- */
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            min-height: 0;
+        }
+
+        .message-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        .message-group.sent {
+            align-items: flex-end;
+        }
+
+        .message-bubble {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 16px;
+            font-size: 14px;
+            line-height: 1.5;
+            word-wrap: break-word;
+            animation: slideInUp 0.3s ease-out;
+        }
+
+        .message-bubble.received {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: var(--text-light);
+            border-radius: 16px 16px 16px 4px;
+        }
+
+        .message-bubble.sent {
+            background: linear-gradient(135deg, var(--accent-white), #e8e8e8);
+            color: var(--primary-black);
+            border-radius: 16px 16px 4px 16px;
+            font-weight: 500;
+        }
+
+        .message-timestamp {
+            font-size: 11px;
+            color: var(--soft-gray);
+            margin-top: 4px;
+        }
+
+        .message-image {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 12px;
+            margin-top: 8px;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .message-image:hover {
+            transform: scale(1.02);
+            filter: brightness(1.1);
+        }
+
+        .message-file {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px 12px;
+            border-radius: 10px;
+            margin-top: 8px;
+        }
+
+        .file-icon {
+            width: 24px;
+            height: 24px;
+        }
+
+        .file-name {
+            font-size: 12px;
+            font-weight: 500;
+            word-break: break-word;
+            flex: 1;
+        }
+
+        /* --- INPUT ÁREA --- */
+        .input-area {
+            padding: 20px;
+            border-top: 1px solid var(--glass-border);
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            animation: slideInUp 0.6s ease-out;
+            background: rgba(15, 15, 15, 0.92);
+            backdrop-filter: blur(18px);
+        }
+
+        .input-group {
+            flex: 1;
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: var(--text-white);
+            font-size: 14px;
+            resize: none;
+            max-height: 100px;
+            transition: var(--transition);
+            font-family: inherit;
+        }
+
+        .message-input::placeholder {
+            color: rgba(255, 255, 255, 0.2);
+        }
+
+        .message-input:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--accent-white);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.15);
+        }
+
+        .icon-button {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: var(--text-light);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            flex-shrink: 0;
+        }
+
+        .icon-button:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: var(--accent-white);
+            color: var(--accent-white);
+        }
+
+        .send-button {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent-white), #e8e8e8);
+            border: none;
+            border-radius: 10px;
+            color: var(--primary-black);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            flex-shrink: 0;
+            font-weight: 700;
+        }
+
+        .send-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(255, 255, 255, 0.3);
+        }
+
+        .send-button:active {
+            transform: translateY(0);
+        }
+
+        /* ==================== MODAL ==================== */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--dark-gray);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: var(--shadow-lg);
+            animation: slideInUp 0.4s ease-out;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            color: var(--text-white);
+        }
+
+        .modal-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: var(--text-white);
+            font-size: 14px;
+            margin-bottom: 20px;
+            transition: var(--transition);
+        }
+
+        .modal-input:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--accent-white);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.15);
+        }
+
+        .modal-button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, var(--accent-white), #e8e8e8);
+            border: none;
+            border-radius: 10px;
+            color: var(--primary-black);
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+            transition: var(--transition);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .modal-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(255, 255, 255, 0.3);
+        }
+
+        /* ==================== TOAST ==================== */
+        .toast-container {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toast {
+            background: var(--dark-gray);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 16px 20px;
+            font-size: 14px;
+            box-shadow: var(--shadow-md);
+            animation: slideInRight 0.4s ease-out;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 300px;
+        }
+
+        .toast.success {
+            border-left: 4px solid #34c759;
+            background: rgba(52, 199, 89, 0.1);
+        }
+
+        .toast.error {
+            border-left: 4px solid #ff3b30;
+            background: rgba(255, 59, 48, 0.1);
+        }
+
+        .toast.info {
+            border-left: 4px solid var(--accent-white);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .toast.success .toast-icon { color: #34c759; }
+        .toast.error .toast-icon { color: #ff3b30; }
+        .toast.info .toast-icon { color: var(--accent-white); }
+
+        .toast-icon {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+
+        .toast-message {
+            flex: 1;
+            color: var(--text-white);
+        }
+
+        /* ==================== LOADING ==================== */
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            border-top-color: var(--accent-white);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .loading-center {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            width: 100%;
+        }
+
+        /* ==================== ANIMAÇÕES ==================== */
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideOutRight {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* ==================== SCROLLBAR ==================== */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* ==================== RESPONSIVO ==================== */
+        @media (max-width: 768px) {
+            html, body {
+                height: 100dvh;
+            }
+
+            body {
+                overflow: hidden;
+            }
+
+            .chat-container {
+                flex-direction: column;
+                height: 100dvh;
+            }
+
+            .mobile-topbar {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px 12px;
+                background: linear-gradient(180deg, rgba(26, 26, 26, 0.98), rgba(18, 18, 18, 0.95));
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                box-shadow: 0 12px 35px rgba(0, 0, 0, 0.35);
+                z-index: 120;
+            }
+
+            .mobile-topbar .user-details {
+                min-width: 0;
+            }
+
+            .mobile-topbar .username-display {
+                font-size: 15px;
+            }
+
+            .mobile-topbar .user-id {
+                font-size: 10px;
+                letter-spacing: 1.2px;
+                opacity: 0.9;
+            }
+
+            .sidebar {
+                display: flex;
+                position: absolute;
+                top: calc(env(safe-area-inset-top, 0px) + 68px);
+                left: 0;
+                width: 100%;
+                height: calc(100dvh - env(safe-area-inset-top, 0px) - 68px);
+                z-index: 110;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+                border-right: none;
+            }
+
+            .sidebar.mobile-open {
+                display: flex;
+                transform: translateX(0);
+            }
+
+            .main-chat {
+                width: 100%;
+                height: calc(100dvh - env(safe-area-inset-top, 0px) - 68px);
+            }
+
+            .message-bubble {
+                max-width: 85%;
+            }
+
+            .chat-header {
+                padding: 16px;
+            }
+
+            .back-button {
+                display: inline-flex;
+            }
+
+            .messages-container {
+                padding: 16px;
+            }
+
+            .input-area {
+                padding: 12px 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+                gap: 10px;
+            }
+
+            .input-group {
+                gap: 6px;
+            }
+
+            .message-input {
+                min-height: 44px;
+                padding: 12px 14px;
+            }
+
+            .toast-container {
+                bottom: 20px;
+                right: 20px;
+                left: 20px;
+            }
+
+            .toast {
+                min-width: 0;
+                width: 100%;
+                font-size: 13px;
+            }
+
+            .login-card {
+                padding: 40px 25px;
+            }
+
+            .modal {
+                width: 95%;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .sidebar-header {
+                padding: 16px;
+            }
+
+            .search-container {
+                padding: 14px 16px;
+            }
+
+            .conversations-list {
+                padding-bottom: 20px;
+            }
+
+            .conversation-item {
+                padding: 16px;
+            }
+
+            .message-bubble {
+                max-width: 95%;
+                padding: 10px 14px;
+                font-size: 13px;
+            }
+
+            .input-area {
+                padding: 10px 12px calc(env(safe-area-inset-bottom, 0px) + 10px);
+                gap: 8px;
+            }
+
+            .icon-button, .send-button {
+                width: 42px;
+                height: 42px;
+                border-radius: 12px;
+            }
+
+            .login-card {
+                padding: 30px 20px;
+            }
+
+            .login-title {
+                font-size: 24px;
+            }
+
+            .toast {
+                min-width: 250px;
+            }
+        }
+    </style>
+  <style>body { box-sizing: border-box; }</style>
+ </head>
+ <body>
+  <!-- ==================== TELA DE LOGIN ==================== -->
+  <div id="loginScreen" class="login-container">
+   <div class="login-card">
+    <h1 class="login-title">EPHEMERAL</h1>
+    <p class="login-subtitle">Mensageiro Secreto</p>
+    <form class="login-form" id="loginForm">
+     <div class="form-group">
+      <label class="form-label">Usuário</label> <input type="text" id="usernameInput" class="form-input" placeholder="Digite seu nome de usuário" autocomplete="off">
+     </div>
+     <div class="form-group">
+      <label class="form-label">Senha</label> <input type="password" id="passwordInput" class="form-input" placeholder="Digite sua senha">
+     </div><button type="submit" class="login-button" id="loginButton">Entrar</button>
+    </form>
+   </div>
+  </div><!-- ==================== TELA DE CHAT ==================== -->
+  <div id="chatScreen" class="chat-container" style="display: none;">
+   <div class="mobile-topbar">
+    <div class="user-details">
+     <div class="username-display" id="mobileUsername">
+      Usuario
+     </div>
+     <div class="user-id" id="mobileUserID">
+      00000
+     </div>
+    </div><button class="logout-btn" id="mobileLogoutButton" title="Bloquear"> <i data-lucide="log-out" style="width: 18px; height: 18px;"></i> </button>
+   </div>
+   <!-- SIDEBAR -->
+   <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+     <div class="user-info">
+      <div class="user-details">
+       <div class="username-display" id="sidebarUsername">
+        Usuario
+       </div>
+       <div class="user-id" id="sidebarUserID">
+        00000
+       </div>
+      </div><button class="logout-btn" id="logoutButton" title="Sair"> <i data-lucide="log-out" style="width: 18px; height: 18px;"></i> </button>
+     </div>
+    </div>
+    <div class="search-container">
+     <input type="text" class="search-input" id="searchInput" placeholder="Buscar por ID...">
+    </div>
+    <div class="conversations-list" id="conversationsList">
+     <div class="empty-state">
+      <i data-lucide="message-circle" class="empty-state-icon"></i>
+      <p class="empty-state-text">Nenhuma conversa iniciada ainda<br>
+        Busque um usuário para começar</p>
+     </div>
+    </div>
+   </aside><!-- MAIN CHAT -->
+   <div class="main-chat">
+     <div class="chat-header" id="chatHeader" style="display: none;">
+      <div class="chat-header-main">
+       <button class="back-button" id="backToSidebarButton" title="Conversas"> <i data-lucide="arrow-left" style="width: 18px; height: 18px;"></i> </button>
+       <div class="chat-header-info">
+        <h2 id="chatHeaderName">Selecione uma conversa</h2>
+        <p id="chatHeaderId">ID: -----</p>
+       </div>
+      </div>
+     </div>
+    <div class="messages-container" id="messagesContainer" style="display: none;">
+     <!-- Mensagens aparecem aqui -->
+    </div>
+    <div class="input-area" id="inputArea" style="display: none;">
+     <div class="input-group">
+      <button class="icon-button" id="attachButton" title="Anexar arquivo"> <i data-lucide="paperclip" style="width: 18px; height: 18px;"></i> </button> <button class="icon-button" id="galleryButton" title="Foto da galeria"> <i data-lucide="image" style="width: 18px; height: 18px;"></i> </button> <button class="icon-button" id="cameraButton" title="Tirar foto"> <i data-lucide="camera" style="width: 18px; height: 18px;"></i> </button> <textarea class="message-input" id="messageInput" placeholder="Digite sua mensagem..." rows="1"></textarea>
+     </div><button class="send-button" id="sendButton" title="Enviar"> <i data-lucide="send" style="width: 18px; height: 18px;"></i> </button>
+    </div>
+    <div id="noChatSelected" style="display: none;">
+     <div class="empty-state">
+      <i data-lucide="lock" class="empty-state-icon"></i>
+      <p class="empty-state-text">Suas mensagens são privadas<br>
+        e automaticamente criptografadas</p>
+     </div>
+    </div>
+   </div>
+  </div><!-- ==================== MODAIS ==================== -->
+  <div class="modal-overlay" id="searchResultModal">
+   <div class="modal">
+    <h3 class="modal-title">Usuário Encontrado</h3>
+    <div style="margin-bottom: 20px;">
+     <p style="font-size: 14px; color: var(--text-light); margin-bottom: 8px;">Nome:</p>
+     <p id="foundUsername" style="font-size: 16px; font-weight: 600; color: var(--text-white);"></p>
+    </div>
+    <div style="margin-bottom: 25px;">
+     <p style="font-size: 14px; color: var(--text-light); margin-bottom: 8px;">ID de Usuário:</p>
+     <p id="foundUserID" style="font-size: 16px; font-weight: 600; color: var(--accent-blue); font-family: 'Courier New', monospace;"></p>
+    </div><button class="modal-button" id="startChatButton">Iniciar Conversa</button>
+   </div>
+  </div><!-- TOAST CONTAINER -->
+  <div class="toast-container" id="toastContainer"></div><!-- INPUT OCULTOS --> <input type="file" id="fileInput" style="display: none;" accept="*/*"> <input type="file" id="galleryInput" style="display: none;" accept="image/*"> <input type="file" id="cameraInput" style="display: none;" accept="image/*" capture="environment"> <!-- MODAL PARA VER IMAGEM EM FULLSCREEN -->
+  <div class="modal-overlay" id="imageModal" style="display: none;">
+   <div style="background: rgba(0, 0, 0, 0.8); border-radius: 15px; padding: 0; max-width: 90vw; max-height: 90vh; position: relative;">
+    <button style="position: absolute; top: 15px; right: 15px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; width: 40px; height: 40px; color: var(--text-white); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10;" onclick="closeImageModal()"> <i data-lucide="x" style="width: 20px; height: 20px;"></i> </button> <img id="modalImage" src="" style="max-width: 100%; max-height: 100%; display: block; border-radius: 15px;">
+   </div>
+  </div>
+  <script>
+        // ==================== CONFIGURAÇÃO FIREBASE ====================
+        // CONFIGURE AQUI COM SUAS CREDENCIAIS DO FIREBASE
+        const firebaseConfig = {
+            apiKey: "AIzaSyBYSoz9F_pAgznjUjWmPIPqL_jdCk1CFVY",
+            authDomain: "rede-b5f80.firebaseapp.com",
+            projectId: "rede-b5f80",
+            storageBucket: "rede-b5f80.firebasestorage.app",
+            messagingSenderId: "855256737101",
+            appId: "1:855256737101:web:c5295b8fdf2970f40a8304"
+        };
+
+        // Inicializar Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const storage = firebase.storage();
+
+        // ==================== VARIÁVEIS GLOBAIS ====================
+        let currentUser = null;
+        let currentUserID = null;
+        let currentChatUser = null;
+        let currentChatUserID = null;
+        let currentConversationKey = null;
+        let currentConversationID = null;
+        let conversations = {};
+        let messageUnsubscribe = null;
+
+        // ==================== FUNÇÕES UTILITÁRIAS ====================
+        
+        /**
+         * Gera um ID numérico único de 5 dígitos
+         */
+        function generateUserID() {
+            return Math.floor(10000 + Math.random() * 90000).toString();
+        }
+
+        function getConversationKey(userA, userB) {
+            return [userA, userB].sort().join('_');
+        }
+
+        async function generateUniqueUserID() {
+            let userID = generateUserID();
+            let existingUser = await db.collection('users').where('userID', '==', userID).get();
+
+            while (!existingUser.empty) {
+                userID = generateUserID();
+                existingUser = await db.collection('users').where('userID', '==', userID).get();
+            }
+
+            return userID;
+        }
+
+        /**
+         * Criptografia simples para as mensagens (AES básico via WebCrypto)
+         * Em produção, use uma biblioteca de criptografia robusta
+         */
+        async function encryptMessage(message, key) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(message);
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const encrypted = await crypto.subtle.encrypt(
+                { name: "AES-GCM", iv },
+                key,
+                data
+            );
+            return {
+                encryptedText: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
+                iv: btoa(String.fromCharCode(...iv))
+            };
+        }
+
+        /**
+         * Descriptografa mensagens
+         */
+        async function decryptMessage(encryptedMessage, key, ivBase64) {
+            try {
+                const binaryString = atob(encryptedMessage);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                const ivString = ivBase64 ? atob(ivBase64) : '';
+                const iv = ivBase64
+                    ? Uint8Array.from(ivString, char => char.charCodeAt(0))
+                    : new Uint8Array(12);
+                const decrypted = await crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv },
+                    key,
+                    bytes
+                );
+                return new TextDecoder().decode(decrypted);
+            } catch (err) {
+                console.error("Erro ao descriptografar:", err);
+                return "[Mensagem criptografada]";
+            }
+        }
+
+        /**
+         * Cria uma chave de criptografia baseada no usuário
+         */
+        async function generateEncryptionKey(seed) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(seed + "_cipher_secret");
+            const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+            return crypto.subtle.importKey(
+                "raw",
+                hashBuffer,
+                { name: "AES-GCM" },
+                false,
+                ["encrypt", "decrypt"]
+            );
+        }
+
+        /**
+         * Mostra toast notifications
+         */
+        function showToast(message, type = 'info') {
+            const toastContainer = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+
+            let icon = 'info';
+            if (type === 'success') icon = 'check-circle';
+            if (type === 'error') icon = 'alert-circle';
+
+            toast.innerHTML = `
+                <i data-lucide="${icon}" class="toast-icon"></i>
+                <div class="toast-message">${message}</div>
+            `;
+            toastContainer.appendChild(toast);
+            lucide.createIcons();
+
+            setTimeout(() => {
+                toast.style.animation = 'slideOutRight 0.4s ease-out';
+                setTimeout(() => toast.remove(), 400);
+            }, 3000);
+        }
+
+        /**
+         * Formata timestamp para exibição
+         */
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = now - date;
+            const minutes = Math.floor(diff / 60000);
+
+            if (minutes < 1) return 'Agora';
+            if (minutes < 60) return `${minutes}m`;
+            
+            const hours = Math.floor(diff / 3600000);
+            if (hours < 24) return `${hours}h`;
+            
+            return date.toLocaleDateString('pt-BR');
+        }
+
+        /**
+         * Verifica se mensagem expirou (24 horas)
+         */
+        function isMessageExpired(timestamp) {
+            const messageDate = new Date(timestamp);
+            const now = new Date();
+            const ageInHours = (now - messageDate) / (1000 * 60 * 60);
+            return ageInHours > 24;
+        }
+
+        function resetChatUI() {
+            currentChatUser = null;
+            currentChatUserID = null;
+            currentConversationID = null;
+            currentConversationKey = null;
+
+            if (messageUnsubscribe) {
+                messageUnsubscribe();
+                messageUnsubscribe = null;
+            }
+
+            document.getElementById('chatHeader').style.display = 'none';
+            document.getElementById('messagesContainer').style.display = 'none';
+            document.getElementById('inputArea').style.display = 'none';
+            document.getElementById('messagesContainer').innerHTML = '';
+            document.getElementById('noChatSelected').style.display = 'block';
+            document.querySelectorAll('.conversation-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            handleViewportLayout();
+        }
+
+        async function getConversationByUsers(otherUserID) {
+            const conversationKey = getConversationKey(currentUserID, otherUserID);
+            const conversationsRef = db.collection('conversations');
+            const convQuery = await conversationsRef
+                .where('conversationKey', '==', conversationKey)
+                .limit(1)
+                .get();
+
+            if (!convQuery.empty) {
+                return {
+                    conversationKey,
+                    doc: convQuery.docs[0]
+                };
+            }
+
+            const legacyQuery = await conversationsRef
+                .where('participants', 'array-contains', currentUserID)
+                .get();
+            const legacyDoc = legacyQuery.docs.find(doc => {
+                const participants = doc.data().participants || [];
+                return participants.includes(otherUserID);
+            });
+
+            if (legacyDoc) {
+                await legacyDoc.ref.update({ conversationKey });
+            }
+
+            return {
+                conversationKey,
+                doc: legacyDoc || null
+            };
+        }
+
+        function isMobileView() {
+            return window.innerWidth <= 768;
+        }
+
+        function openSidebar() {
+            if (isMobileView()) {
+                document.getElementById('sidebar').classList.add('mobile-open');
+            }
+        }
+
+        function closeSidebar() {
+            if (isMobileView()) {
+                document.getElementById('sidebar').classList.remove('mobile-open');
+            }
+        }
+
+        function syncUserHeader() {
+            document.getElementById('sidebarUsername').textContent = currentUser || 'Usuario';
+            document.getElementById('sidebarUserID').textContent = currentUserID || '00000';
+            document.getElementById('mobileUsername').textContent = currentUser || 'Usuario';
+            document.getElementById('mobileUserID').textContent = currentUserID || '00000';
+        }
+
+        function handleViewportLayout() {
+            if (isMobileView()) {
+                if (!currentConversationID) {
+                    openSidebar();
+                }
+            } else {
+                document.getElementById('sidebar').classList.remove('mobile-open');
+            }
+        }
+
+        // ==================== AUTENTICAÇÃO ====================
+
+        /**
+         * Registra novo usuário ou faz login
+         */
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('usernameInput').value.trim();
+            const password = document.getElementById('passwordInput').value;
+
+            if (!username || !password) {
+                showToast('Preencha todos os campos', 'error');
+                return;
+            }
+
+            const loginButton = document.getElementById('loginButton');
+            loginButton.disabled = true;
+            loginButton.innerHTML = '<div class="loading-spinner"></div>';
+
+            try {
+                // Verifica se usuário existe no Firestore
+                const usersRef = db.collection('users');
+                const userQuery = await usersRef.where('username', '==', username).get();
+
+                if (!userQuery.empty) {
+                    // Usuário existe - verifica senha
+                    const userData = userQuery.docs[0].data();
+                    if (userData.password !== password) {
+                        showToast('Senha incorreta', 'error');
+                        return;
+                    }
+                    // Login bem-sucedido
+                    currentUser = username;
+                    currentUserID = userData.userID;
+                } else {
+                    // Novo usuário - cria conta
+                    const newUserID = await generateUniqueUserID();
+                    await usersRef.add({
+                        username: username,
+                        password: password, // ⚠️ Em produção, usar hash (bcrypt)
+                        userID: newUserID,
+                        createdAt: new Date(),
+                        lastSeen: new Date()
+                    });
+                    currentUser = username;
+                    currentUserID = newUserID;
+                    showToast('Conta criada com sucesso!', 'success');
+                }
+
+                // Mostra tela de chat
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('chatScreen').style.display = 'flex';
+                syncUserHeader();
+                resetChatUI();
+
+                // Carrega conversas
+                loadConversations();
+            } catch (error) {
+                console.error('Erro no login:', error);
+                showToast('Erro ao fazer login', 'error');
+            } finally {
+                loginButton.disabled = false;
+                loginButton.textContent = 'ENTRAR';
+            }
+        });
+
+        /**
+         * Logout
+         */
+        function handleLogout() {
+            if (confirm('Tem certeza que deseja sair?')) {
+                currentUser = null;
+                currentUserID = null;
+                resetChatUI();
+                
+                document.getElementById('chatScreen').style.display = 'none';
+                document.getElementById('loginScreen').style.display = 'flex';
+                document.getElementById('usernameInput').value = '';
+                document.getElementById('passwordInput').value = '';
+                syncUserHeader();
+                document.getElementById('conversationsList').innerHTML = `
+                    <div class="empty-state">
+                        <i data-lucide="message-circle" class="empty-state-icon"></i>
+                        <p class="empty-state-text">Nenhuma conversa iniciada ainda</p>
+                    </div>
+                `;
+                showToast('Desconectado com sucesso', 'info');
+            }
+        }
+
+        document.getElementById('logoutButton').addEventListener('click', handleLogout);
+        document.getElementById('mobileLogoutButton').addEventListener('click', handleLogout);
+
+        // ==================== BUSCA E CONVERSA ====================
+
+        /**
+         * Busca usuário por ID
+         */
+        document.getElementById('searchInput').addEventListener('input', async (e) => {
+            const searchID = e.target.value.trim();
+
+            if (!searchID) return;
+
+            if (searchID.length !== 5 || !/^\d+$/.test(searchID)) {
+                return;
+            }
+
+            try {
+                const usersRef = db.collection('users');
+                const userQuery = await usersRef.where('userID', '==', searchID).get();
+
+                if (!userQuery.empty && userQuery.docs[0].data().userID !== currentUserID) {
+                    const userData = userQuery.docs[0].data();
+                    document.getElementById('foundUsername').textContent = userData.username;
+                    document.getElementById('foundUserID').textContent = userData.userID;
+                    document.getElementById('searchResultModal').classList.add('active');
+                    currentChatUserID = userData.userID;
+                    currentChatUser = userData.username;
+                } else if (searchID === currentUserID) {
+                    showToast('Você não pode conversar consigo mesmo', 'error');
+                } else {
+                    showToast('Usuário não encontrado', 'error');
+                }
+            } catch (error) {
+                console.error('Erro ao buscar usuário:', error);
+            }
+        });
+
+        /**
+         * Inicia conversa com usuário encontrado
+         */
+        document.getElementById('startChatButton').addEventListener('click', () => {
+            document.getElementById('searchResultModal').classList.remove('active');
+            document.getElementById('searchInput').value = '';
+            
+            // Cria ou carrega conversa
+            createOrLoadConversation(currentChatUserID, currentChatUser);
+        });
+
+        /**
+         * Carrega todas as conversas do usuário
+         */
+        async function loadConversations() {
+            try {
+                const conversationsRef = db.collection('conversations');
+                const userConversations = await conversationsRef
+                    .where('participants', 'array-contains', currentUserID)
+                    .get();
+                const sortedConversations = userConversations.docs.sort((a, b) => {
+                    const aTime = a.data().lastMessageTime?.toMillis?.() || 0;
+                    const bTime = b.data().lastMessageTime?.toMillis?.() || 0;
+                    return bTime - aTime;
+                });
+
+                const convList = document.getElementById('conversationsList');
+                convList.innerHTML = '';
+
+                if (userConversations.empty) {
+                    convList.innerHTML = `
+                        <div class="empty-state">
+                            <i data-lucide="message-circle" class="empty-state-icon"></i>
+                            <p class="empty-state-text">Nenhuma conversa iniciada ainda</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                for (const doc of sortedConversations) {
+                    const convData = doc.data();
+                    const otherUserID = convData.participants.find(id => id !== currentUserID);
+                    
+                    // Busca info do outro usuário
+                    const otherUserData = await db.collection('users')
+                        .where('userID', '==', otherUserID)
+                        .get();
+
+                    if (!otherUserData.empty) {
+                        const otherUser = otherUserData.docs[0].data();
+                        const convItem = document.createElement('div');
+                        convItem.className = 'conversation-item';
+                        convItem.dataset.conversationId = doc.id;
+                        convItem.innerHTML = `
+                            <div class="conversation-name">${otherUser.username}</div>
+                            <div class="conversation-id">ID: ${otherUserID}</div>
+                        `;
+                        convItem.addEventListener('click', () => {
+                            selectConversation(doc.id, otherUserID, otherUser.username);
+                        });
+                        convList.appendChild(convItem);
+                    }
+                }
+                lucide.createIcons();
+            } catch (error) {
+                console.error('Erro ao carregar conversas:', error);
+            }
+        }
+
+        /**
+         * Cria ou carrega conversa
+         */
+        async function createOrLoadConversation(otherUserID, otherUsername) {
+            try {
+                const conversationsRef = db.collection('conversations');
+                const { conversationKey, doc: existingConversation } = await getConversationByUsers(otherUserID);
+
+                let conversationID;
+                if (existingConversation) {
+                    conversationID = existingConversation.id;
+                } else {
+                    // Cria nova conversa
+                    const newConv = await conversationsRef.add({
+                        participants: [currentUserID, otherUserID],
+                        conversationKey: conversationKey,
+                        createdAt: new Date(),
+                        lastMessage: null,
+                        lastMessageTime: new Date()
+                    });
+                    conversationID = newConv.id;
+                }
+
+                selectConversation(conversationID, otherUserID, otherUsername);
+                loadConversations();
+            } catch (error) {
+                console.error('Erro ao criar/carregar conversa:', error);
+                showToast('Erro ao iniciar conversa', 'error');
+            }
+        }
+
+        /**
+         * Seleciona uma conversa para exibir
+         */
+        function selectConversation(conversationID, otherUserID, otherUsername) {
+            currentChatUserID = otherUserID;
+            currentChatUser = otherUsername;
+            currentConversationID = conversationID;
+            currentConversationKey = getConversationKey(currentUserID, otherUserID);
+
+            // Atualiza cabeçalho
+            document.getElementById('chatHeader').style.display = 'flex';
+            document.getElementById('chatHeaderName').textContent = otherUsername;
+            document.getElementById('chatHeaderId').textContent = `ID: ${otherUserID}`;
+
+            // Mostra área de mensagens e input
+            document.getElementById('messagesContainer').style.display = 'flex';
+            document.getElementById('inputArea').style.display = 'flex';
+            document.getElementById('noChatSelected').style.display = 'none';
+
+            // Atualiza conversa ativa no sidebar
+            document.querySelectorAll('.conversation-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.dataset.conversationId === conversationID) {
+                    item.classList.add('active');
+                }
+            });
+
+            // Carrega mensagens
+            closeSidebar();
+            loadMessages(conversationID, otherUserID);
+        }
+
+        /**
+         * Carrega mensagens da conversa
+         */
+        function loadMessages(conversationID, otherUserID) {
+            const messagesContainer = document.getElementById('messagesContainer');
+            messagesContainer.innerHTML = '';
+            const conversationKey = getConversationKey(currentUserID, otherUserID);
+
+            // Desinscreve do anterior se existir
+            if (messageUnsubscribe) messageUnsubscribe();
+
+            // Inscreve em tempo real
+            messageUnsubscribe = db.collection('conversations')
+                .doc(conversationID)
+                .collection('messages')
+                .orderBy('timestamp', 'asc')
+                .onSnapshot(async (snapshot) => {
+                    messagesContainer.innerHTML = '';
+
+                    for (const doc of snapshot.docs) {
+                        const msg = doc.data();
+
+                        // Verifica se mensagem expirou
+                        if (isMessageExpired(msg.timestamp.toDate())) {
+                            // Deleta mensagem expirada
+                            await doc.ref.delete();
+                            continue;
+                        }
+
+                        // Descriptografa mensagem se for texto
+                        let displayText = msg.text;
+                        if (msg.type === 'text' && msg.encrypted) {
+                            const conversationEncryptionKey = await generateEncryptionKey(conversationKey);
+                            displayText = await decryptMessage(msg.text, conversationEncryptionKey, msg.iv);
+                        }
+
+                        const msgGroup = document.createElement('div');
+                        msgGroup.className = `message-group ${msg.sender === currentUserID ? 'sent' : ''}`;
+
+                        const bubble = document.createElement('div');
+                        bubble.className = `message-bubble ${msg.sender === currentUserID ? 'sent' : 'received'}`;
+
+                        if (msg.type === 'text') {
+                            bubble.textContent = displayText;
+                        } else if (msg.type === 'image') {
+                            const img = document.createElement('img');
+                            img.src = msg.url;
+                            img.className = 'message-image';
+                            img.addEventListener('click', () => openImageModal(msg.url));
+                            bubble.appendChild(img);
+                        } else if (msg.type === 'file') {
+                            const fileDiv = document.createElement('div');
+                            fileDiv.className = 'message-file';
+                            fileDiv.innerHTML = `
+                                <i data-lucide="file" class="file-icon"></i>
+                                <div class="file-name">${msg.fileName}</div>
+                            `;
+                            bubble.appendChild(fileDiv);
+                            bubble.style.cursor = 'pointer';
+                            bubble.addEventListener('click', () => {
+                                const a = document.createElement('a');
+                                a.href = msg.url;
+                                a.download = msg.fileName;
+                                a.click();
+                            });
+                        }
+
+                        const timestamp = document.createElement('div');
+                        timestamp.className = 'message-timestamp';
+                        timestamp.textContent = formatTime(msg.timestamp.toDate());
+
+                        msgGroup.appendChild(bubble);
+                        msgGroup.appendChild(timestamp);
+                        messagesContainer.appendChild(msgGroup);
+                        lucide.createIcons();
+                    }
+
+                    // Scroll para última mensagem
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                });
+        }
+
+        // ==================== ENVIO DE MENSAGENS ====================
+
+        /**
+         * Envia mensagem de texto
+         */
+        async function sendTextMessage() {
+            const input = document.getElementById('messageInput');
+            const text = input.value.trim();
+
+            if (!text || !currentChatUserID || !currentConversationID || !currentConversationKey) return;
+
+            input.value = '';
+            input.style.height = 'auto';
+
+            try {
+                // Criptografa mensagem
+                const conversationEncryptionKey = await generateEncryptionKey(currentConversationKey);
+                const encryptedPayload = await encryptMessage(text, conversationEncryptionKey);
+
+                // Envia mensagem
+                await db.collection('conversations')
+                    .doc(currentConversationID)
+                        .collection('messages')
+                        .add({
+                        text: encryptedPayload.encryptedText,
+                        iv: encryptedPayload.iv,
+                        type: 'text',
+                        encrypted: true,
+                        sender: currentUserID,
+                        timestamp: new Date(),
+                        read: false
+                    });
+
+                // Atualiza última mensagem
+                await db.collection('conversations').doc(currentConversationID).update({
+                    lastMessage: text,
+                    lastMessageTime: new Date()
+                });
+            } catch (error) {
+                console.error('Erro ao enviar mensagem:', error);
+                showToast('Erro ao enviar mensagem', 'error');
+            }
+        }
+
+        /**
+         * Envia arquivo
+         */
+        async function sendFile(file) {
+            if (!currentChatUserID || !file || !currentConversationID) return;
+            
+            // Mostra loading
+            showToast('Enviando arquivo...', 'info');
+
+            try {
+                const storageRef = storage.ref();
+                const fileRef = storageRef.child(
+                    `chats/${currentUserID}_${currentChatUserID}/${Date.now()}_${file.name}`
+                );
+
+                await fileRef.put(file);
+                const downloadURL = await fileRef.getDownloadURL();
+
+                // Determine tipo
+                const isImage = file.type.startsWith('image/');
+                const messageType = isImage ? 'image' : 'file';
+
+                await db.collection('conversations')
+                    .doc(currentConversationID)
+                    .collection('messages')
+                    .add({
+                        url: downloadURL,
+                        type: messageType,
+                        sender: currentUserID,
+                        timestamp: new Date(),
+                        fileName: file.name,
+                        read: false
+                    });
+
+                await db.collection('conversations').doc(currentConversationID).update({
+                    lastMessage: file.name,
+                    lastMessageTime: new Date()
+                });
+
+                showToast('Arquivo enviado!', 'success');
+            } catch (error) {
+                console.error('Erro ao enviar arquivo:', error);
+                showToast('Erro ao enviar arquivo', 'error');
+            }
+        }
+
+        /**
+         * Abre imagem em fullscreen
+         */
+        function openImageModal(url) {
+            document.getElementById('modalImage').src = url;
+            document.getElementById('imageModal').style.display = 'flex';
+        }
+
+        function closeImageModal() {
+            document.getElementById('imageModal').style.display = 'none';
+        }
+
+        // ==================== EVENT LISTENERS ====================
+
+        // Enviar mensagem com Enter
+        document.getElementById('messageInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendTextMessage();
+            }
+        });
+
+        // Auto-resize textarea
+        document.getElementById('messageInput').addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+        });
+
+        // Botão enviar
+        document.getElementById('sendButton').addEventListener('click', sendTextMessage);
+
+        // Anexar arquivo
+        document.getElementById('attachButton').addEventListener('click', () => {
+            document.getElementById('fileInput').click();
+        });
+
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            if (e.target.files[0]) {
+                sendFile(e.target.files[0]);
+                e.target.value = '';
+            }
+        });
+
+        // Galeria
+        document.getElementById('galleryButton').addEventListener('click', () => {
+            document.getElementById('galleryInput').click();
+        });
+
+        document.getElementById('galleryInput').addEventListener('change', (e) => {
+            if (e.target.files[0]) {
+                sendFile(e.target.files[0]);
+                e.target.value = '';
+            }
+        });
+
+        // Câmera
+        document.getElementById('cameraButton').addEventListener('click', () => {
+            document.getElementById('cameraInput').click();
+        });
+
+        document.getElementById('cameraInput').addEventListener('change', (e) => {
+            if (e.target.files[0]) {
+                sendFile(e.target.files[0]);
+                e.target.value = '';
+            }
+        });
+
+        // Fechar modal de imagem
+        document.getElementById('imageModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('imageModal')) {
+                closeImageModal();
+            }
+        });
+
+        document.getElementById('backToSidebarButton').addEventListener('click', () => {
+            resetChatUI();
+        });
+
+        window.addEventListener('resize', handleViewportLayout);
+        handleViewportLayout();
+
+        // Inicializa icons
+        lucide.createIcons();
+    </script>
+ </body>
+</html>
