@@ -2,7 +2,7 @@
 <html lang="pt-BR">
  <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0a0a0a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Ephemeral">
@@ -48,12 +48,15 @@
             width: 100%;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             background: var(--primary-black);
+            overflow-x: hidden;
         }
 
         body {
             background: linear-gradient(135deg, var(--primary-black) 0%, #0f0f0f 50%, var(--dark-gray) 100%);
             color: var(--text-white);
             overflow: hidden;
+            position: fixed;
+            inset: 0;
         }
 
         /* ==================== TELA DE LOGIN ==================== */
@@ -178,6 +181,8 @@
             width: 100%;
             height: 100%;
             background: var(--primary-black);
+            max-width: 100vw;
+            overflow: hidden;
         }
 
         .mobile-topbar {
@@ -339,6 +344,8 @@
             flex-direction: column;
             background: var(--primary-black);
             min-width: 0;
+            max-width: 100vw;
+            overflow: hidden;
         }
 
         .chat-header {
@@ -348,6 +355,7 @@
             align-items: center;
             justify-content: space-between;
             animation: slideInDown 0.6s ease-out;
+            max-width: 100%;
         }
 
         .chat-header-main {
@@ -486,21 +494,77 @@
             border-top: 1px solid var(--glass-border);
             display: flex;
             gap: 12px;
-            align-items: flex-end;
+            align-items: center;
             animation: slideInUp 0.6s ease-out;
             background: rgba(15, 15, 15, 0.92);
             backdrop-filter: blur(18px);
+            width: 100%;
+            max-width: 100%;
+            position: relative;
         }
 
         .input-group {
             flex: 1;
             display: flex;
             gap: 8px;
-            align-items: flex-end;
+            align-items: center;
+            min-width: 0;
+            max-width: 100%;
+        }
+
+        .composer-tools {
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .attachment-menu {
+            position: absolute;
+            bottom: calc(100% + 10px);
+            left: 0;
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            padding: 10px;
+            border-radius: 16px;
+            background: rgba(20, 20, 20, 0.98);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
+            z-index: 30;
+        }
+
+        .attachment-menu.active {
+            display: flex;
+        }
+
+        .attachment-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 160px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            color: var(--text-white);
+            padding: 11px 12px;
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 14px;
+        }
+
+        .attachment-option:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.14);
+        }
+
+        .attachment-option i {
+            width: 16px;
+            height: 16px;
         }
 
         .message-input {
             flex: 1;
+            width: 100%;
+            min-width: 0;
             padding: 12px 16px;
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -882,6 +946,7 @@
             .chat-container {
                 flex-direction: column;
                 height: 100dvh;
+                width: 100vw;
             }
 
             .mobile-topbar {
@@ -894,6 +959,8 @@
                 border-bottom: 1px solid rgba(255, 255, 255, 0.08);
                 box-shadow: 0 12px 35px rgba(0, 0, 0, 0.35);
                 z-index: 120;
+                width: 100%;
+                max-width: 100vw;
             }
 
             .mobile-topbar .user-details {
@@ -962,9 +1029,16 @@
                 gap: 6px;
             }
 
+            .attachment-menu {
+                left: 0;
+                right: auto;
+                min-width: 170px;
+            }
+
             .message-input {
                 min-height: 44px;
                 padding: 12px 14px;
+                font-size: 16px !important;
             }
 
             .form-input,
@@ -1023,6 +1097,10 @@
                 width: 42px;
                 height: 42px;
                 border-radius: 12px;
+            }
+
+            .attachment-option {
+                min-width: 150px;
             }
 
             .login-card {
@@ -1107,7 +1185,14 @@
     </div>
     <div class="input-area" id="inputArea" style="display: none;">
      <div class="input-group">
-      <button class="icon-button" id="attachButton" title="Anexar arquivo"> <i data-lucide="paperclip" style="width: 18px; height: 18px;"></i> </button> <button class="icon-button" id="galleryButton" title="Foto da galeria"> <i data-lucide="image" style="width: 18px; height: 18px;"></i> </button> <button class="icon-button" id="cameraButton" title="Tirar foto"> <i data-lucide="camera" style="width: 18px; height: 18px;"></i> </button> <textarea class="message-input" id="messageInput" placeholder="Digite sua mensagem..." rows="1"></textarea>
+      <div class="composer-tools">
+       <button class="icon-button" id="plusButton" title="Mais opcoes"> <i data-lucide="plus" style="width: 18px; height: 18px;"></i> </button>
+       <div class="attachment-menu" id="attachmentMenu">
+        <button class="attachment-option" id="attachButton" title="Anexar arquivo"> <i data-lucide="paperclip"></i> <span>Arquivo</span> </button>
+        <button class="attachment-option" id="galleryButton" title="Foto da galeria"> <i data-lucide="image"></i> <span>Galeria</span> </button>
+        <button class="attachment-option" id="cameraButton" title="Tirar foto"> <i data-lucide="camera"></i> <span>Camera</span> </button>
+       </div>
+      </div><textarea class="message-input" id="messageInput" placeholder="Digite sua mensagem..." rows="1"></textarea>
      </div><button class="send-button" id="sendButton" title="Enviar"> <i data-lucide="send" style="width: 18px; height: 18px;"></i> </button>
     </div>
     <div id="noChatSelected" style="display: none;">
@@ -1611,6 +1696,18 @@
             notification.onclick = () => window.focus();
         }
 
+        function openAttachmentMenu() {
+            document.getElementById('attachmentMenu').classList.add('active');
+        }
+
+        function closeAttachmentMenu() {
+            document.getElementById('attachmentMenu').classList.remove('active');
+        }
+
+        function toggleAttachmentMenu() {
+            document.getElementById('attachmentMenu').classList.toggle('active');
+        }
+
         // ==================== AUTENTICAÇÃO ====================
 
         /**
@@ -2106,9 +2203,14 @@
 
         // Botão enviar
         document.getElementById('sendButton').addEventListener('click', sendTextMessage);
+        document.getElementById('plusButton').addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleAttachmentMenu();
+        });
 
         // Anexar arquivo
         document.getElementById('attachButton').addEventListener('click', () => {
+            closeAttachmentMenu();
             document.getElementById('fileInput').click();
         });
 
@@ -2121,6 +2223,7 @@
 
         // Galeria
         document.getElementById('galleryButton').addEventListener('click', () => {
+            closeAttachmentMenu();
             document.getElementById('galleryInput').click();
         });
 
@@ -2133,6 +2236,7 @@
 
         // Câmera
         document.getElementById('cameraButton').addEventListener('click', () => {
+            closeAttachmentMenu();
             document.getElementById('cameraInput').click();
         });
 
@@ -2262,6 +2366,13 @@
 
         document.getElementById('backToSidebarButton').addEventListener('click', () => {
             resetChatUI();
+        });
+
+        document.addEventListener('click', (e) => {
+            const tools = document.querySelector('.composer-tools');
+            if (tools && !tools.contains(e.target)) {
+                closeAttachmentMenu();
+            }
         });
 
         window.addEventListener('resize', handleViewportLayout);
