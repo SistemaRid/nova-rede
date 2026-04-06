@@ -1469,7 +1469,6 @@
 
         async function getConversationByUsers(otherUserID) {
             const conversationKey = getConversationKey(currentUserID, otherUserID);
-            currentConversationID = conversationID;
             const conversationsRef = db.collection('conversations');
             const convQuery = await conversationsRef
                 .where('conversationKey', '==', conversationKey)
@@ -1665,7 +1664,7 @@
             }
 
             try {
-                serviceWorkerRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                serviceWorkerRegistration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
                 const permission = await Notification.requestPermission();
 
                 if (permission !== 'granted') {
