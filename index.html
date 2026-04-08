@@ -1655,11 +1655,14 @@
         let activeCallSessionId = null;
         let activeCallRole = null;
         let activeCallPeer = null;
+        let activeCallConversationID = null;
         let localCallStream = null;
         let remoteCallStream = null;
         let pendingIncomingCall = null;
+        let pendingIncomingCallContext = null;
         let processedCallAnswerId = null;
         let processedIceCandidates = new Set();
+        let callConnectionTimeout = null;
         const MAX_INLINE_MEDIA_BYTES = 700 * 1024;
         const RTC_CONFIGURATION = {
             iceServers: [
@@ -1896,6 +1899,57 @@
             };
         }
 
+        function serializeIceCandidate(candidate) {
+            if (!candidate || !activeCallSessionId) return null;
+            return JSON.stringify({
+                sessionId: activeCallSessionId,
+                candidate: candidate.toJSON()
+            });
+        }
+
+        function parseIceCandidate(candidateValue) {
+            if (!candidateValue) return null;
+
+            try {
+                const parsed = typeof candidateValue === 'string'
+                    ? JSON.parse(candidateValue)
+                    : candidateValue;
+
+                if (parsed?.candidate && parsed?.sessionId) {
+                    return parsed;
+                }
+
+                return {
+                    sessionId: activeCallSessionId,
+                    candidate: parsed
+                };
+            } catch (error) {
+                console.error('Erro ao ler candidato ICE:', error);
+                return null;
+            }
+        }
+
+        function clearCallConnectionTimeout() {
+            if (callConnectionTimeout) {
+                clearTimeout(callConnectionTimeout);
+                callConnectionTimeout = null;
+            }
+        }
+
+        function startCallConnectionTimeout() {
+            clearCallConnectionTimeout();
+            callConnectionTimeout = setTimeout(() => {
+                if (!activeCallPeer || activeCallPeer.connectionState === 'connected') {
+                    return;
+                }
+
+                showToast('A ligacao nao conseguiu conectar', 'error');
+                endCurrentCall('ended', { silent: true }).catch(() => {
+                    cleanupCallResources();
+                });
+            }, 25000);
+        }
+
         async function ensureLocalCallStream() {
             if (localCallStream) {
                 return localCallStream;
@@ -1908,8 +1962,10 @@
 
         function cleanupCallResources({ closeModal: shouldCloseModal = true } = {}) {
             pendingIncomingCall = null;
+            pendingIncomingCallContext = null;
             processedCallAnswerId = null;
             processedIceCandidates = new Set();
+            clearCallConnectionTimeout();
 
             if (activeCallPeer) {
                 try {
@@ -1935,6 +1991,7 @@
             remoteCallStream = null;
             activeCallRole = null;
             activeCallSessionId = null;
+            activeCallConversationID = null;
             document.getElementById('callRemoteAudio').srcObject = null;
             document.getElementById('callLocalAudio').srcObject = null;
 
@@ -1959,14 +2016,17 @@
             };
 
             peer.onicecandidate = async (event) => {
-                if (!event.candidate || !currentConversationID || !activeCallRole) return;
+                if (!event.candidate || !activeCallConversationID || !activeCallRole) return;
+
+                const serializedCandidate = serializeIceCandidate(event.candidate);
+                if (!serializedCandidate) return;
 
                 try {
                     await db.collection('conversations')
-                        .doc(currentConversationID)
+                        .doc(activeCallConversationID)
                         .update({
                             [activeCallRole === 'caller' ? 'offerCandidates' : 'answerCandidates']:
-                                firebase.firestore.FieldValue.arrayUnion(JSON.stringify(event.candidate.toJSON())),
+                                firebase.firestore.FieldValue.arrayUnion(serializedCandidate),
                             'callSession.updatedAt': new Date()
                         });
                 } catch (error) {
@@ -1978,16 +2038,22 @@
                 const state = peer.connectionState;
 
                 if (state === 'connected') {
+                    clearCallConnectionTimeout();
                     updateCallModal({
                         title: `Ligacao com ${currentChatUser || 'contato'}`,
                         status: 'Chamada conectada',
                         showEnd: true
                     });
+                } else if (state === 'disconnected') {
+                    startCallConnectionTimeout();
                 } else if (state === 'failed') {
+                    clearCallConnectionTimeout();
                     showToast('Falha na ligacao', 'error');
                     endCurrentCall('ended', { silent: true }).catch(() => {
                         cleanupCallResources();
                     });
+                } else if (state === 'closed') {
+                    clearCallConnectionTimeout();
                 }
             };
 
@@ -2001,16 +2067,16 @@
             const candidates = Array.isArray(conversationData?.[remoteCandidateField]) ? conversationData[remoteCandidateField] : [];
 
             for (const candidateValue of candidates) {
-                const candidateKey = `${activeCallSessionId}:${remoteCandidateField}:${candidateValue}`;
+                const parsedEntry = parseIceCandidate(candidateValue);
+                if (!parsedEntry || parsedEntry.sessionId !== activeCallSessionId) continue;
+
+                const candidateKey = `${parsedEntry.sessionId}:${remoteCandidateField}:${candidateValue}`;
                 if (processedIceCandidates.has(candidateKey)) continue;
 
                 processedIceCandidates.add(candidateKey);
 
                 try {
-                    const parsedCandidate = typeof candidateValue === 'string'
-                        ? JSON.parse(candidateValue)
-                        : candidateValue;
-                    await activeCallPeer.addIceCandidate(new RTCIceCandidate(parsedCandidate));
+                    await activeCallPeer.addIceCandidate(new RTCIceCandidate(parsedEntry.candidate));
                 } catch (error) {
                     console.error('Erro ao aplicar candidato ICE remoto:', error);
                 }
@@ -2056,7 +2122,9 @@
             try {
                 activeCallSessionId = `call_${Date.now()}_${currentUserID}`;
                 activeCallRole = 'caller';
+                activeCallConversationID = currentConversationID;
                 pendingIncomingCall = null;
+                pendingIncomingCallContext = null;
                 processedCallAnswerId = null;
                 processedIceCandidates = new Set();
 
@@ -2091,6 +2159,7 @@
                     status: 'Chamando...',
                     showEnd: true
                 });
+                startCallConnectionTimeout();
             } catch (error) {
                 console.error('Erro ao iniciar ligacao:', error);
                 cleanupCallResources();
@@ -2099,11 +2168,22 @@
         }
 
         async function acceptIncomingCall() {
-            if (!pendingIncomingCall || !currentConversationID) return;
+            if (!pendingIncomingCall || !pendingIncomingCallContext?.conversationID) return;
 
             try {
+                const {
+                    conversationID,
+                    otherUserID,
+                    otherUsername
+                } = pendingIncomingCallContext;
+
+                if (currentConversationID !== conversationID) {
+                    selectConversation(conversationID, otherUserID, otherUsername, { preserveCall: true });
+                }
+
                 activeCallSessionId = pendingIncomingCall.id;
                 activeCallRole = 'callee';
+                activeCallConversationID = conversationID;
                 processedCallAnswerId = null;
                 processedIceCandidates = new Set();
 
@@ -2112,10 +2192,10 @@
                 stream.getTracks().forEach((track) => activeCallPeer.addTrack(track, stream));
 
                 await activeCallPeer.setRemoteDescription(new RTCSessionDescription(pendingIncomingCall.offer));
-                await applyRemoteIceCandidates(currentConversationState);
+                await applyRemoteIceCandidates(currentConversationState?.callSession?.id === pendingIncomingCall.id ? currentConversationState : pendingIncomingCallContext.conversationData);
 
                 const answer = await activeCallPeer.createAnswer();
-                await db.collection('conversations').doc(currentConversationID).set({
+                await db.collection('conversations').doc(conversationID).set({
                     callSession: {
                         ...pendingIncomingCall,
                         answer: serializeSessionDescription(answer),
@@ -2136,6 +2216,7 @@
                     status: 'Conectando audio...',
                     showEnd: true
                 });
+                startCallConnectionTimeout();
             } catch (error) {
                 console.error('Erro ao aceitar ligacao:', error);
                 cleanupCallResources();
@@ -2145,7 +2226,7 @@
 
         async function endCurrentCall(reason = 'ended', options = {}) {
             const {
-                conversationID = currentConversationID,
+                conversationID = activeCallConversationID || currentConversationID || pendingIncomingCallContext?.conversationID,
                 silent = false
             } = options;
 
@@ -2174,11 +2255,14 @@
             }
         }
 
-        async function syncCallState(conversationData) {
+        async function syncCallState(conversationData, context = {}) {
             const callSession = conversationData?.callSession;
+            const conversationID = context.conversationID || currentConversationID;
+            const otherUserID = context.otherUserID || (callSession?.callerId === currentUserID ? callSession?.calleeId : callSession?.callerId) || currentChatUserID;
+            const otherUsername = context.otherUsername || (callSession?.callerId === currentUserID ? callSession?.calleeName : callSession?.callerName) || currentChatUser;
 
             if (!callSession?.id) {
-                if (pendingIncomingCall && !activeCallPeer) {
+                if (pendingIncomingCall && !activeCallPeer && pendingIncomingCallContext?.conversationID === conversationID) {
                     cleanupCallResources();
                 }
                 return;
@@ -2190,6 +2274,12 @@
 
             if (callSession.status === 'ringing' && isCallee && (!pendingIncomingCall || pendingIncomingCall.id !== callSession.id) && !activeCallPeer) {
                 pendingIncomingCall = callSession;
+                pendingIncomingCallContext = {
+                    conversationID,
+                    otherUserID,
+                    otherUsername,
+                    conversationData
+                };
                 activeCallSessionId = callSession.id;
                 activeCallRole = 'callee';
                 processedIceCandidates = new Set();
@@ -2203,14 +2293,16 @@
             }
 
             if (callSession.status === 'ringing' && isCaller && activeCallSessionId === callSession.id) {
+                activeCallConversationID = conversationID;
                 updateCallModal({
-                    title: `Ligando para ${callSession.calleeName || currentChatUser || 'contato'}`,
+                    title: `Ligando para ${callSession.calleeName || otherUsername || currentChatUser || 'contato'}`,
                     status: 'Chamando...',
                     showEnd: true
                 });
             }
 
             if ((callSession.status === 'active' || callSession.answer) && activeCallSessionId === callSession.id) {
+                activeCallConversationID = conversationID;
                 await handleRemoteAnswer(callSession);
                 await applyRemoteIceCandidates(conversationData);
             }
@@ -2258,7 +2350,11 @@
             const isOtherTyping = typingBy.includes(currentChatUserID);
             typingStatus.classList.toggle('active', isOtherTyping);
 
-            syncCallState(conversationData).catch((error) => {
+            syncCallState(conversationData, {
+                conversationID: currentConversationID,
+                otherUserID: currentChatUserID,
+                otherUsername: currentChatUser
+            }).catch((error) => {
                 console.error('Erro ao sincronizar estado da ligacao:', error);
             });
         }
@@ -3166,6 +3262,32 @@
                             return bTime - aTime;
                         });
 
+                        const globalCallCandidate = sortedConversations.find((doc) => {
+                            const callSession = doc.data()?.callSession;
+                            if (!callSession?.id) return false;
+                            const isParticipant = callSession.callerId === currentUserID || callSession.calleeId === currentUserID;
+                            if (!isParticipant) return false;
+                            return ['ringing', 'active', 'declined', 'ended'].includes(callSession.status) || Boolean(callSession.answer);
+                        });
+
+                        if (globalCallCandidate) {
+                            const globalCallData = globalCallCandidate.data();
+                            const globalOtherUserID = globalCallData.participants.find(id => id !== currentUserID);
+                            const globalOtherUsername = globalCallData.callSession?.callerId === currentUserID
+                                ? globalCallData.callSession?.calleeName
+                                : globalCallData.callSession?.callerName;
+
+                            syncCallState(globalCallData, {
+                                conversationID: globalCallCandidate.id,
+                                otherUserID: globalOtherUserID,
+                                otherUsername: globalOtherUsername
+                            }).catch((error) => {
+                                console.error('Erro ao sincronizar chamada global:', error);
+                            });
+                        } else if ((pendingIncomingCall || activeCallSessionId) && currentConversationID !== activeCallConversationID) {
+                            cleanupCallResources();
+                        }
+
                         const convList = document.getElementById('conversationsList');
                         convList.innerHTML = '';
 
@@ -3274,8 +3396,11 @@
         /**
          * Seleciona uma conversa para exibir
          */
-        function selectConversation(conversationID, otherUserID, otherUsername) {
-            if (currentConversationID && currentConversationID !== conversationID && (activeCallSessionId || pendingIncomingCall || activeCallPeer)) {
+        function selectConversation(conversationID, otherUserID, otherUsername, options = {}) {
+            const hasOngoingCall = Boolean(activeCallSessionId || pendingIncomingCall || activeCallPeer);
+            const preserveCall = options.preserveCall === true || (hasOngoingCall && options.preserveCall !== false);
+
+            if (!preserveCall && currentConversationID && currentConversationID !== conversationID && (activeCallSessionId || pendingIncomingCall || activeCallPeer)) {
                 endCurrentCall('ended', {
                     conversationID: currentConversationID,
                     silent: true
@@ -4190,6 +4315,11 @@
         });
 
         document.getElementById('backToSidebarButton').addEventListener('click', () => {
+            if (activeCallSessionId || activeCallPeer) {
+                openSidebar();
+                return;
+            }
+
             resetChatUI();
         });
 
