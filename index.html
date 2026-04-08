@@ -405,6 +405,12 @@
             flex-shrink: 0;
         }
 
+        .call-button-active {
+            background: rgba(52, 199, 89, 0.15);
+            border-color: rgba(52, 199, 89, 0.35);
+            color: #8dd7a0;
+        }
+
         .chat-header-meta {
             display: flex;
             flex-direction: column;
@@ -1012,6 +1018,67 @@
             height: 18px;
         }
 
+        .call-modal {
+            max-width: 380px;
+            text-align: center;
+        }
+
+        .call-avatar {
+            width: 84px;
+            height: 84px;
+            margin: 0 auto 18px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-white);
+        }
+
+        .call-status {
+            color: var(--soft-gray);
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 22px;
+        }
+
+        .call-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .call-action-button {
+            flex: 1;
+            padding: 13px 14px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .call-action-button.accept {
+            background: linear-gradient(135deg, #34c759, #28a745);
+            color: #ffffff;
+        }
+
+        .call-action-button.decline {
+            background: rgba(255, 59, 48, 0.12);
+            border: 1px solid rgba(255, 59, 48, 0.28);
+            color: #ff8c82;
+        }
+
+        .call-action-button.end {
+            background: linear-gradient(135deg, #ff5f57, #ff3b30);
+            color: #ffffff;
+        }
+
+        .call-action-button:hover {
+            transform: translateY(-1px);
+        }
+
         /* ==================== TOAST ==================== */
         .toast-container {
             position: fixed;
@@ -1432,6 +1499,7 @@
        </div>
       </div>
       <div class="chat-header-actions">
+       <button class="icon-button" id="callButton" title="Ligacao online"> <i data-lucide="phone" style="width: 18px; height: 18px;"></i> </button>
        <button class="icon-button" id="chatSearchButton" title="Buscar no chat"> <i data-lucide="search" style="width: 18px; height: 18px;"></i> </button>
       </div>
      </div>
@@ -1514,6 +1582,20 @@
      <button class="action-sheet-button danger" id="deleteConversationButton"> <i data-lucide="trash-2"></i> Apagar conversa </button>
     </div>
    </div>
+  </div>
+  <div class="modal-overlay" id="callModal">
+   <div class="modal call-modal">
+    <div class="call-avatar">
+     <i data-lucide="phone-call" style="width: 34px; height: 34px;"></i>
+    </div>
+    <h3 class="modal-title" id="callModalTitle">Ligacao de voz</h3>
+    <p class="call-status" id="callModalStatus">Preparando chamada...</p>
+    <div class="call-actions">
+     <button class="call-action-button accept" id="acceptCallButton" style="display: none;">Atender</button>
+     <button class="call-action-button decline" id="declineCallButton" style="display: none;">Recusar</button>
+     <button class="call-action-button end" id="endCallButton" style="display: none;">Encerrar</button>
+    </div>
+   </div>
   </div><!-- TOAST CONTAINER -->
   <div class="toast-container" id="toastContainer"></div><!-- INPUT OCULTOS --> <input type="file" id="fileInput" style="display: none;" accept="*/*"> <input type="file" id="galleryInput" style="display: none;" accept="image/*"> <input type="file" id="cameraInput" style="display: none;" accept="image/*" capture="environment"> <!-- MODAL PARA VER IMAGEM EM FULLSCREEN -->
   <div class="modal-overlay" id="imageModal" style="display: none;">
@@ -1521,6 +1603,8 @@
     <button style="position: absolute; top: 15px; right: 15px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; width: 40px; height: 40px; color: var(--text-white); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10;" onclick="closeImageModal()"> <i data-lucide="x" style="width: 20px; height: 20px;"></i> </button> <img id="modalImage" src="" style="max-width: 100%; max-height: 100%; display: block; border-radius: 15px;">
    </div>
   </div>
+  <audio id="callRemoteAudio" autoplay playsinline></audio>
+  <audio id="callLocalAudio" autoplay playsinline muted></audio>
   <script>
         // ==================== CONFIGURAÇÃO FIREBASE ====================
         // CONFIGURE AQUI COM SUAS CREDENCIAIS DO FIREBASE
@@ -1568,7 +1652,20 @@
         let currentMessagesCache = [];
         let typingDebounceTimeout = null;
         let typingReleaseTimeout = null;
+        let activeCallSessionId = null;
+        let activeCallRole = null;
+        let activeCallPeer = null;
+        let localCallStream = null;
+        let remoteCallStream = null;
+        let pendingIncomingCall = null;
+        let processedCallAnswerId = null;
+        let processedIceCandidates = new Set();
         const MAX_INLINE_MEDIA_BYTES = 700 * 1024;
+        const RTC_CONFIGURATION = {
+            iceServers: [
+                { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }
+            ]
+        };
 
         // ==================== FUNÇÕES UTILITÁRIAS ====================
         
@@ -1714,6 +1811,15 @@
                 setTypingState(false).catch(() => {});
             }
 
+            if (activeCallSessionId || pendingIncomingCall || activeCallPeer) {
+                endCurrentCall('ended', {
+                    conversationID: currentConversationID,
+                    silent: true
+                }).catch(() => {
+                    cleanupCallResources();
+                });
+            }
+
             currentChatUser = null;
             currentChatUserID = null;
             currentConversationID = null;
@@ -1760,6 +1866,365 @@
             handleViewportLayout();
         }
 
+        function isRtcCallingSupported() {
+            return Boolean(
+                navigator.mediaDevices?.getUserMedia &&
+                window.RTCPeerConnection
+            );
+        }
+
+        function updateCallModal({ title, status, showAccept = false, showDecline = false, showEnd = false } = {}) {
+            document.getElementById('callModalTitle').textContent = title || 'Ligacao de voz';
+            document.getElementById('callModalStatus').textContent = status || 'Preparando chamada...';
+            document.getElementById('acceptCallButton').style.display = showAccept ? 'block' : 'none';
+            document.getElementById('declineCallButton').style.display = showDecline ? 'block' : 'none';
+            document.getElementById('endCallButton').style.display = showEnd ? 'block' : 'none';
+            document.getElementById('callModal').classList.add('active');
+            document.getElementById('callButton').classList.toggle('call-button-active', showEnd || showAccept || showDecline);
+        }
+
+        function closeCallModal() {
+            document.getElementById('callModal').classList.remove('active');
+            document.getElementById('callButton').classList.remove('call-button-active');
+        }
+
+        function serializeSessionDescription(description) {
+            if (!description) return null;
+            return {
+                type: description.type,
+                sdp: description.sdp
+            };
+        }
+
+        async function ensureLocalCallStream() {
+            if (localCallStream) {
+                return localCallStream;
+            }
+
+            localCallStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            document.getElementById('callLocalAudio').srcObject = localCallStream;
+            return localCallStream;
+        }
+
+        function cleanupCallResources({ closeModal: shouldCloseModal = true } = {}) {
+            pendingIncomingCall = null;
+            processedCallAnswerId = null;
+            processedIceCandidates = new Set();
+
+            if (activeCallPeer) {
+                try {
+                    activeCallPeer.onicecandidate = null;
+                    activeCallPeer.ontrack = null;
+                    activeCallPeer.onconnectionstatechange = null;
+                    activeCallPeer.close();
+                } catch (error) {
+                    console.error('Erro ao encerrar peer connection:', error);
+                }
+            }
+
+            if (localCallStream) {
+                localCallStream.getTracks().forEach((track) => track.stop());
+            }
+
+            if (remoteCallStream) {
+                remoteCallStream.getTracks().forEach((track) => track.stop());
+            }
+
+            activeCallPeer = null;
+            localCallStream = null;
+            remoteCallStream = null;
+            activeCallRole = null;
+            activeCallSessionId = null;
+            document.getElementById('callRemoteAudio').srcObject = null;
+            document.getElementById('callLocalAudio').srcObject = null;
+
+            if (shouldCloseModal) {
+                closeCallModal();
+            }
+        }
+
+        function createCallPeerConnection() {
+            const peer = new RTCPeerConnection(RTC_CONFIGURATION);
+
+            peer.ontrack = (event) => {
+                if (!remoteCallStream) {
+                    remoteCallStream = new MediaStream();
+                }
+
+                event.streams[0].getTracks().forEach((track) => {
+                    remoteCallStream.addTrack(track);
+                });
+
+                document.getElementById('callRemoteAudio').srcObject = remoteCallStream;
+            };
+
+            peer.onicecandidate = async (event) => {
+                if (!event.candidate || !currentConversationID || !activeCallRole) return;
+
+                try {
+                    await db.collection('conversations')
+                        .doc(currentConversationID)
+                        .update({
+                            [activeCallRole === 'caller' ? 'offerCandidates' : 'answerCandidates']:
+                                firebase.firestore.FieldValue.arrayUnion(JSON.stringify(event.candidate.toJSON())),
+                            'callSession.updatedAt': new Date()
+                        });
+                } catch (error) {
+                    console.error('Erro ao enviar candidato ICE:', error);
+                }
+            };
+
+            peer.onconnectionstatechange = () => {
+                const state = peer.connectionState;
+
+                if (state === 'connected') {
+                    updateCallModal({
+                        title: `Ligacao com ${currentChatUser || 'contato'}`,
+                        status: 'Chamada conectada',
+                        showEnd: true
+                    });
+                } else if (state === 'failed') {
+                    showToast('Falha na ligacao', 'error');
+                    endCurrentCall('ended', { silent: true }).catch(() => {
+                        cleanupCallResources();
+                    });
+                }
+            };
+
+            return peer;
+        }
+
+        async function applyRemoteIceCandidates(conversationData = currentConversationState) {
+            if (!activeCallPeer || !activeCallRole || !activeCallSessionId) return;
+
+            const remoteCandidateField = activeCallRole === 'caller' ? 'answerCandidates' : 'offerCandidates';
+            const candidates = Array.isArray(conversationData?.[remoteCandidateField]) ? conversationData[remoteCandidateField] : [];
+
+            for (const candidateValue of candidates) {
+                const candidateKey = `${activeCallSessionId}:${remoteCandidateField}:${candidateValue}`;
+                if (processedIceCandidates.has(candidateKey)) continue;
+
+                processedIceCandidates.add(candidateKey);
+
+                try {
+                    const parsedCandidate = typeof candidateValue === 'string'
+                        ? JSON.parse(candidateValue)
+                        : candidateValue;
+                    await activeCallPeer.addIceCandidate(new RTCIceCandidate(parsedCandidate));
+                } catch (error) {
+                    console.error('Erro ao aplicar candidato ICE remoto:', error);
+                }
+            }
+        }
+
+        async function handleRemoteAnswer(callSession) {
+            if (
+                !callSession?.answer ||
+                activeCallRole !== 'caller' ||
+                !activeCallPeer ||
+                processedCallAnswerId === callSession.id
+            ) {
+                return;
+            }
+
+            await activeCallPeer.setRemoteDescription(new RTCSessionDescription(callSession.answer));
+            processedCallAnswerId = callSession.id;
+            updateCallModal({
+                title: `Ligacao com ${currentChatUser || 'contato'}`,
+                status: 'Conectando audio...',
+                showEnd: true
+            });
+        }
+
+        async function startPhoneCall() {
+            if (!currentChatUserID || !currentConversationID) {
+                showToast('Selecione uma conversa primeiro', 'info');
+                return;
+            }
+
+            if (!isRtcCallingSupported()) {
+                showToast('Chamadas online nao sao suportadas neste navegador', 'error');
+                return;
+            }
+
+            const callSession = currentConversationState?.callSession;
+            if (callSession?.status === 'ringing' || callSession?.status === 'active') {
+                showToast('Ja existe uma ligacao em andamento nesta conversa', 'info');
+                return;
+            }
+
+            try {
+                activeCallSessionId = `call_${Date.now()}_${currentUserID}`;
+                activeCallRole = 'caller';
+                pendingIncomingCall = null;
+                processedCallAnswerId = null;
+                processedIceCandidates = new Set();
+
+                const stream = await ensureLocalCallStream();
+                activeCallPeer = createCallPeerConnection();
+                stream.getTracks().forEach((track) => activeCallPeer.addTrack(track, stream));
+
+                const offer = await activeCallPeer.createOffer();
+                await db.collection('conversations').doc(currentConversationID).set({
+                    callSession: {
+                        id: activeCallSessionId,
+                        callerId: currentUserID,
+                        callerName: currentUser,
+                        calleeId: currentChatUserID,
+                        calleeName: currentChatUser,
+                        status: 'ringing',
+                        offer: serializeSessionDescription(offer),
+                        answer: null,
+                        startedAt: new Date(),
+                        updatedAt: new Date(),
+                        endedAt: null,
+                        endedBy: null
+                    },
+                    offerCandidates: [],
+                    answerCandidates: []
+                }, { merge: true });
+
+                await activeCallPeer.setLocalDescription(offer);
+
+                updateCallModal({
+                    title: `Ligando para ${currentChatUser || 'contato'}`,
+                    status: 'Chamando...',
+                    showEnd: true
+                });
+            } catch (error) {
+                console.error('Erro ao iniciar ligacao:', error);
+                cleanupCallResources();
+                showToast('Nao foi possivel iniciar a ligacao', 'error');
+            }
+        }
+
+        async function acceptIncomingCall() {
+            if (!pendingIncomingCall || !currentConversationID) return;
+
+            try {
+                activeCallSessionId = pendingIncomingCall.id;
+                activeCallRole = 'callee';
+                processedCallAnswerId = null;
+                processedIceCandidates = new Set();
+
+                const stream = await ensureLocalCallStream();
+                activeCallPeer = createCallPeerConnection();
+                stream.getTracks().forEach((track) => activeCallPeer.addTrack(track, stream));
+
+                await activeCallPeer.setRemoteDescription(new RTCSessionDescription(pendingIncomingCall.offer));
+                await applyRemoteIceCandidates(currentConversationState);
+
+                const answer = await activeCallPeer.createAnswer();
+                await db.collection('conversations').doc(currentConversationID).set({
+                    callSession: {
+                        ...pendingIncomingCall,
+                        answer: serializeSessionDescription(answer),
+                        status: 'active',
+                        updatedAt: new Date(),
+                        acceptedAt: new Date(),
+                        endedAt: null,
+                        endedBy: null
+                    },
+                    answerCandidates: []
+                }, { merge: true });
+
+                await activeCallPeer.setLocalDescription(answer);
+
+                pendingIncomingCall = null;
+                updateCallModal({
+                    title: `Ligacao com ${currentChatUser || 'contato'}`,
+                    status: 'Conectando audio...',
+                    showEnd: true
+                });
+            } catch (error) {
+                console.error('Erro ao aceitar ligacao:', error);
+                cleanupCallResources();
+                showToast('Nao foi possivel atender a ligacao', 'error');
+            }
+        }
+
+        async function endCurrentCall(reason = 'ended', options = {}) {
+            const {
+                conversationID = currentConversationID,
+                silent = false
+            } = options;
+
+            const sessionId = activeCallSessionId || pendingIncomingCall?.id || currentConversationState?.callSession?.id;
+            const status = reason === 'declined' ? 'declined' : 'ended';
+
+            if (conversationID && sessionId) {
+                try {
+                    await db.collection('conversations')
+                        .doc(conversationID)
+                        .update({
+                            'callSession.status': status,
+                            'callSession.updatedAt': new Date(),
+                            'callSession.endedAt': new Date(),
+                            'callSession.endedBy': currentUserID
+                        });
+                } catch (error) {
+                    console.error('Erro ao atualizar encerramento da ligacao:', error);
+                }
+            }
+
+            cleanupCallResources();
+
+            if (!silent) {
+                showToast(status === 'declined' ? 'Ligacao recusada' : 'Ligacao encerrada', 'info');
+            }
+        }
+
+        async function syncCallState(conversationData) {
+            const callSession = conversationData?.callSession;
+
+            if (!callSession?.id) {
+                if (pendingIncomingCall && !activeCallPeer) {
+                    cleanupCallResources();
+                }
+                return;
+            }
+
+            const isCaller = callSession.callerId === currentUserID;
+            const isCallee = callSession.calleeId === currentUserID;
+            if (!isCaller && !isCallee) return;
+
+            if (callSession.status === 'ringing' && isCallee && (!pendingIncomingCall || pendingIncomingCall.id !== callSession.id) && !activeCallPeer) {
+                pendingIncomingCall = callSession;
+                activeCallSessionId = callSession.id;
+                activeCallRole = 'callee';
+                processedIceCandidates = new Set();
+                updateCallModal({
+                    title: `${callSession.callerName || 'Contato'} esta ligando`,
+                    status: 'Chamada de voz recebida',
+                    showAccept: true,
+                    showDecline: true
+                });
+                return;
+            }
+
+            if (callSession.status === 'ringing' && isCaller && activeCallSessionId === callSession.id) {
+                updateCallModal({
+                    title: `Ligando para ${callSession.calleeName || currentChatUser || 'contato'}`,
+                    status: 'Chamando...',
+                    showEnd: true
+                });
+            }
+
+            if ((callSession.status === 'active' || callSession.answer) && activeCallSessionId === callSession.id) {
+                await handleRemoteAnswer(callSession);
+                await applyRemoteIceCandidates(conversationData);
+            }
+
+            if ((callSession.status === 'declined' || callSession.status === 'ended') && (activeCallSessionId === callSession.id || pendingIncomingCall?.id === callSession.id)) {
+                const endedByMe = callSession.endedBy === currentUserID;
+                cleanupCallResources();
+
+                if (!endedByMe) {
+                    showToast(callSession.status === 'declined' ? 'A ligacao foi recusada' : 'A ligacao foi encerrada', 'info');
+                }
+            }
+        }
+
         function applyConversationState(conversationData) {
             currentConversationState = conversationData || null;
 
@@ -1767,6 +2232,7 @@
             const sendButton = document.getElementById('sendButton');
             const recordButton = document.getElementById('recordButton');
             const plusButton = document.getElementById('plusButton');
+            const callButton = document.getElementById('callButton');
 
             const blockedBy = Array.isArray(conversationData?.blockedBy) ? conversationData.blockedBy : [];
             const isBlockedByMe = blockedBy.includes(currentUserID);
@@ -1777,6 +2243,7 @@
             sendButton.disabled = isBlocked;
             recordButton.disabled = isBlocked;
             plusButton.disabled = isBlocked;
+            callButton.disabled = isBlocked || !isRtcCallingSupported();
 
             if (isBlockedByMe) {
                 input.placeholder = 'Voce bloqueou este usuario';
@@ -1790,6 +2257,10 @@
             const typingBy = Array.isArray(conversationData?.typingBy) ? conversationData.typingBy : [];
             const isOtherTyping = typingBy.includes(currentChatUserID);
             typingStatus.classList.toggle('active', isOtherTyping);
+
+            syncCallState(conversationData).catch((error) => {
+                console.error('Erro ao sincronizar estado da ligacao:', error);
+            });
         }
 
         function getConversationTtlHours(conversationData = currentConversationState) {
@@ -2804,6 +3275,15 @@
          * Seleciona uma conversa para exibir
          */
         function selectConversation(conversationID, otherUserID, otherUsername) {
+            if (currentConversationID && currentConversationID !== conversationID && (activeCallSessionId || pendingIncomingCall || activeCallPeer)) {
+                endCurrentCall('ended', {
+                    conversationID: currentConversationID,
+                    silent: true
+                }).catch(() => {
+                    cleanupCallResources();
+                });
+            }
+
             currentChatUserID = otherUserID;
             currentChatUser = otherUsername;
             currentConversationID = conversationID;
@@ -3467,6 +3947,18 @@
         });
 
         // Botão enviar
+        document.getElementById('callButton').addEventListener('click', startPhoneCall);
+        document.getElementById('acceptCallButton').addEventListener('click', acceptIncomingCall);
+        document.getElementById('declineCallButton').addEventListener('click', () => {
+            endCurrentCall('declined').catch(() => {
+                cleanupCallResources();
+            });
+        });
+        document.getElementById('endCallButton').addEventListener('click', () => {
+            endCurrentCall('ended').catch(() => {
+                cleanupCallResources();
+            });
+        });
         document.getElementById('sendButton').addEventListener('click', sendTextMessage);
         document.getElementById('cancelReplyButton').addEventListener('click', clearReplyDraft);
         document.getElementById('chatSearchButton').addEventListener('click', () => {
@@ -3577,6 +4069,12 @@
         document.getElementById('conversationActionModal').addEventListener('click', (e) => {
             if (e.target === document.getElementById('conversationActionModal')) {
                 closeConversationActionModal();
+            }
+        });
+
+        document.getElementById('callModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('callModal')) {
+                e.preventDefault();
             }
         });
 
