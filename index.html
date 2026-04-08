@@ -1950,6 +1950,33 @@
             }, 25000);
         }
 
+        function waitForIceGathering(peer, timeoutMs = 2000) {
+            if (!peer || peer.iceGatheringState === 'complete') {
+                return Promise.resolve();
+            }
+
+            return new Promise((resolve) => {
+                let settled = false;
+
+                const finish = () => {
+                    if (settled) return;
+                    settled = true;
+                    peer.removeEventListener('icegatheringstatechange', handleStateChange);
+                    clearTimeout(timeoutId);
+                    resolve();
+                };
+
+                const handleStateChange = () => {
+                    if (peer.iceGatheringState === 'complete') {
+                        finish();
+                    }
+                };
+
+                const timeoutId = setTimeout(finish, timeoutMs);
+                peer.addEventListener('icegatheringstatechange', handleStateChange);
+            });
+        }
+
         async function ensureLocalCallStream() {
             if (localCallStream) {
                 return localCallStream;
@@ -1972,6 +1999,7 @@
                     activeCallPeer.onicecandidate = null;
                     activeCallPeer.ontrack = null;
                     activeCallPeer.onconnectionstatechange = null;
+                    activeCallPeer.oniceconnectionstatechange = null;
                     activeCallPeer.close();
                 } catch (error) {
                     console.error('Erro ao encerrar peer connection:', error);
@@ -2057,6 +2085,20 @@
                 }
             };
 
+            peer.oniceconnectionstatechange = () => {
+                const iceState = peer.iceConnectionState;
+
+                if (iceState === 'connected' || iceState === 'completed') {
+                    clearCallConnectionTimeout();
+                } else if (iceState === 'failed') {
+                    clearCallConnectionTimeout();
+                    showToast('Falha na conexao de audio', 'error');
+                    endCurrentCall('ended', { silent: true }).catch(() => {
+                        cleanupCallResources();
+                    });
+                }
+            };
+
             return peer;
         }
 
@@ -2133,6 +2175,9 @@
                 stream.getTracks().forEach((track) => activeCallPeer.addTrack(track, stream));
 
                 const offer = await activeCallPeer.createOffer();
+                await activeCallPeer.setLocalDescription(offer);
+                await waitForIceGathering(activeCallPeer);
+
                 await db.collection('conversations').doc(currentConversationID).set({
                     callSession: {
                         id: activeCallSessionId,
@@ -2141,7 +2186,7 @@
                         calleeId: currentChatUserID,
                         calleeName: currentChatUser,
                         status: 'ringing',
-                        offer: serializeSessionDescription(offer),
+                        offer: serializeSessionDescription(activeCallPeer.localDescription || offer),
                         answer: null,
                         startedAt: new Date(),
                         updatedAt: new Date(),
@@ -2151,8 +2196,6 @@
                     offerCandidates: [],
                     answerCandidates: []
                 }, { merge: true });
-
-                await activeCallPeer.setLocalDescription(offer);
 
                 updateCallModal({
                     title: `Ligando para ${currentChatUser || 'contato'}`,
@@ -2195,10 +2238,13 @@
                 await applyRemoteIceCandidates(currentConversationState?.callSession?.id === pendingIncomingCall.id ? currentConversationState : pendingIncomingCallContext.conversationData);
 
                 const answer = await activeCallPeer.createAnswer();
+                await activeCallPeer.setLocalDescription(answer);
+                await waitForIceGathering(activeCallPeer);
+
                 await db.collection('conversations').doc(conversationID).set({
                     callSession: {
                         ...pendingIncomingCall,
-                        answer: serializeSessionDescription(answer),
+                        answer: serializeSessionDescription(activeCallPeer.localDescription || answer),
                         status: 'active',
                         updatedAt: new Date(),
                         acceptedAt: new Date(),
@@ -2207,8 +2253,6 @@
                     },
                     answerCandidates: []
                 }, { merge: true });
-
-                await activeCallPeer.setLocalDescription(answer);
 
                 pendingIncomingCall = null;
                 updateCallModal({
