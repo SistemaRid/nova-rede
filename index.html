@@ -1043,8 +1043,23 @@
             margin-bottom: 22px;
         }
 
+        .call-timer {
+            display: none;
+            margin: -8px 0 18px;
+            color: var(--text-white);
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .call-timer.active {
+            display: block;
+        }
+
         .call-actions {
             display: flex;
+            flex-wrap: wrap;
             gap: 12px;
         }
 
@@ -1077,6 +1092,12 @@
 
         .call-action-button:hover {
             transform: translateY(-1px);
+        }
+
+        .call-action-button.secondary {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: var(--text-white);
         }
 
         /* ==================== TOAST ==================== */
@@ -1590,7 +1611,12 @@
     </div>
     <h3 class="modal-title" id="callModalTitle">Ligacao de voz</h3>
     <p class="call-status" id="callModalStatus">Preparando chamada...</p>
+    <div class="call-timer" id="callTimer">00:00</div>
     <div class="call-actions">
+     <button class="call-action-button secondary" id="speakerCallButton" style="display: none;">Viva-voz</button>
+     <button class="call-action-button secondary" id="muteCallButton" style="display: none;">Mutar</button>
+     <button class="call-action-button secondary" id="minimizeCallButton" style="display: none;">Minimizar</button>
+     <button class="call-action-button" id="addParticipantButton" style="display: none;">Adicionar pessoa</button>
      <button class="call-action-button accept" id="acceptCallButton" style="display: none;">Atender</button>
      <button class="call-action-button decline" id="declineCallButton" style="display: none;">Recusar</button>
      <button class="call-action-button end" id="endCallButton" style="display: none;">Encerrar</button>
@@ -1663,6 +1689,11 @@
         let processedCallAnswerId = null;
         let processedIceCandidates = new Set();
         let callConnectionTimeout = null;
+        let activeCallStartedAt = null;
+        let callDurationInterval = null;
+        let isCallMicMuted = false;
+        let isCallSpeakerEnabled = false;
+        let isCallModalMinimized = false;
         const MAX_INLINE_MEDIA_BYTES = 700 * 1024;
         const RTC_CONFIGURATION = {
             iceServers: [
@@ -1876,14 +1907,152 @@
             );
         }
 
-        function updateCallModal({ title, status, showAccept = false, showDecline = false, showEnd = false } = {}) {
+        function formatCallDuration(totalSeconds) {
+            const safeSeconds = Math.max(0, Number(totalSeconds) || 0);
+            const hours = Math.floor(safeSeconds / 3600);
+            const minutes = Math.floor((safeSeconds % 3600) / 60);
+            const seconds = safeSeconds % 60;
+
+            if (hours > 0) {
+                return [hours, minutes, seconds].map(value => String(value).padStart(2, '0')).join(':');
+            }
+
+            return [minutes, seconds].map(value => String(value).padStart(2, '0')).join(':');
+        }
+
+        function clearCallDurationTimer() {
+            if (callDurationInterval) {
+                clearInterval(callDurationInterval);
+                callDurationInterval = null;
+            }
+        }
+
+        function refreshCallTimerDisplay() {
+            const timer = document.getElementById('callTimer');
+
+            if (!activeCallStartedAt) {
+                timer.textContent = '00:00';
+                timer.classList.remove('active');
+                return;
+            }
+
+            const elapsedSeconds = Math.floor((Date.now() - activeCallStartedAt.getTime()) / 1000);
+            timer.textContent = formatCallDuration(elapsedSeconds);
+            timer.classList.add('active');
+        }
+
+        function setActiveCallStartTime(value) {
+            if (!value) {
+                activeCallStartedAt = null;
+                clearCallDurationTimer();
+                refreshCallTimerDisplay();
+                return;
+            }
+
+            const parsedDate = value?.toDate ? value.toDate() : new Date(value);
+            if (Number.isNaN(parsedDate.getTime())) {
+                return;
+            }
+
+            activeCallStartedAt = parsedDate;
+            refreshCallTimerDisplay();
+            clearCallDurationTimer();
+            callDurationInterval = setInterval(refreshCallTimerDisplay, 1000);
+        }
+
+        function getEndedCallDurationText(callSession) {
+            const startValue = callSession?.acceptedAt || callSession?.startedAt;
+            const endValue = callSession?.endedAt;
+            if (!startValue || !endValue) {
+                if (!activeCallStartedAt) return null;
+
+                const seconds = Math.max(0, Math.floor((Date.now() - activeCallStartedAt.getTime()) / 1000));
+                return formatCallDuration(seconds);
+            }
+
+            const startDate = startValue?.toDate ? startValue.toDate() : new Date(startValue);
+            const endDate = endValue?.toDate ? endValue.toDate() : new Date(endValue);
+            if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+                return null;
+            }
+
+            const seconds = Math.max(0, Math.floor((endDate.getTime() - startDate.getTime()) / 1000));
+            return formatCallDuration(seconds);
+        }
+
+        function refreshCallControlLabels() {
+            document.getElementById('muteCallButton').textContent = isCallMicMuted ? 'Desmutar' : 'Mutar';
+            document.getElementById('speakerCallButton').textContent = isCallSpeakerEnabled ? 'Saida alta' : 'Viva-voz';
+            document.getElementById('minimizeCallButton').textContent = isCallModalMinimized ? 'Abrir chamada' : 'Minimizar';
+        }
+
+        async function unlockRemoteCallAudio({ forceSpeaker = false } = {}) {
+            const remoteAudio = document.getElementById('callRemoteAudio');
+            if (!remoteAudio) return false;
+
+            remoteAudio.autoplay = true;
+            remoteAudio.playsInline = true;
+            remoteAudio.muted = false;
+            remoteAudio.volume = 1;
+
+            if (forceSpeaker) {
+                try {
+                    if (typeof remoteAudio.setSinkId === 'function') {
+                        await remoteAudio.setSinkId('default');
+                    }
+                } catch (error) {
+                    console.warn('Nao foi possivel trocar a saida de audio:', error);
+                }
+            }
+
+            try {
+                await remoteAudio.play();
+                return true;
+            } catch (error) {
+                console.warn('Nao foi possivel reproduzir o audio remoto automaticamente:', error);
+                return false;
+            }
+        }
+
+        function setCallMicMuted(shouldMute) {
+            isCallMicMuted = shouldMute;
+            if (localCallStream) {
+                localCallStream.getAudioTracks().forEach((track) => {
+                    track.enabled = !shouldMute;
+                });
+            }
+            refreshCallControlLabels();
+        }
+
+        function setCallModalMinimized(minimized) {
+            isCallModalMinimized = minimized;
+            const modal = document.getElementById('callModal');
+
+            if (minimized) {
+                modal.classList.remove('active');
+                document.getElementById('callButton').classList.add('call-button-active');
+            } else if (activeCallSessionId || pendingIncomingCall || activeCallPeer) {
+                modal.classList.add('active');
+                document.getElementById('callButton').classList.add('call-button-active');
+            }
+
+            refreshCallControlLabels();
+        }
+
+        function updateCallModal({ title, status, showAccept = false, showDecline = false, showEnd = false, showAddParticipant = false } = {}) {
             document.getElementById('callModalTitle').textContent = title || 'Ligacao de voz';
             document.getElementById('callModalStatus').textContent = status || 'Preparando chamada...';
+            document.getElementById('speakerCallButton').style.display = showEnd ? 'block' : 'none';
+            document.getElementById('muteCallButton').style.display = showEnd ? 'block' : 'none';
+            document.getElementById('minimizeCallButton').style.display = showEnd ? 'block' : 'none';
+            document.getElementById('addParticipantButton').style.display = showAddParticipant ? 'block' : 'none';
             document.getElementById('acceptCallButton').style.display = showAccept ? 'block' : 'none';
             document.getElementById('declineCallButton').style.display = showDecline ? 'block' : 'none';
             document.getElementById('endCallButton').style.display = showEnd ? 'block' : 'none';
+            isCallModalMinimized = false;
             document.getElementById('callModal').classList.add('active');
-            document.getElementById('callButton').classList.toggle('call-button-active', showEnd || showAccept || showDecline);
+            document.getElementById('callButton').classList.toggle('call-button-active', showEnd || showAccept || showDecline || showAddParticipant);
+            refreshCallControlLabels();
         }
 
         function closeCallModal() {
@@ -1993,6 +2162,11 @@
             processedCallAnswerId = null;
             processedIceCandidates = new Set();
             clearCallConnectionTimeout();
+            clearCallDurationTimer();
+            activeCallStartedAt = null;
+            isCallMicMuted = false;
+            isCallSpeakerEnabled = false;
+            isCallModalMinimized = false;
 
             if (activeCallPeer) {
                 try {
@@ -2022,6 +2196,8 @@
             activeCallConversationID = null;
             document.getElementById('callRemoteAudio').srcObject = null;
             document.getElementById('callLocalAudio').srcObject = null;
+            refreshCallTimerDisplay();
+            refreshCallControlLabels();
 
             if (shouldCloseModal) {
                 closeCallModal();
@@ -2041,6 +2217,7 @@
                 });
 
                 document.getElementById('callRemoteAudio').srcObject = remoteCallStream;
+                unlockRemoteCallAudio({ forceSpeaker: isCallSpeakerEnabled }).catch(() => {});
             };
 
             peer.onicecandidate = async (event) => {
@@ -2067,10 +2244,15 @@
 
                 if (state === 'connected') {
                     clearCallConnectionTimeout();
+                    if (!activeCallStartedAt) {
+                        setActiveCallStartTime(new Date());
+                    }
+                    unlockRemoteCallAudio({ forceSpeaker: isCallSpeakerEnabled }).catch(() => {});
                     updateCallModal({
                         title: `Ligacao com ${currentChatUser || 'contato'}`,
                         status: 'Chamada conectada',
-                        showEnd: true
+                        showEnd: true,
+                        showAddParticipant: true
                     });
                 } else if (state === 'disconnected') {
                     startCallConnectionTimeout();
@@ -2276,6 +2458,7 @@
 
             const sessionId = activeCallSessionId || pendingIncomingCall?.id || currentConversationState?.callSession?.id;
             const status = reason === 'declined' ? 'declined' : 'ended';
+            const durationText = reason === 'ended' ? getEndedCallDurationText(currentConversationState?.callSession) : null;
 
             if (conversationID && sessionId) {
                 try {
@@ -2295,7 +2478,11 @@
             cleanupCallResources();
 
             if (!silent) {
-                showToast(status === 'declined' ? 'Ligacao recusada' : 'Ligacao encerrada', 'info');
+                if (status === 'declined') {
+                    showToast('Ligacao recusada', 'info');
+                } else {
+                    showToast(durationText ? `Ligacao encerrada. Duracao: ${durationText}` : 'Ligacao encerrada', 'info');
+                }
             }
         }
 
@@ -2347,16 +2534,24 @@
 
             if ((callSession.status === 'active' || callSession.answer) && activeCallSessionId === callSession.id) {
                 activeCallConversationID = conversationID;
+                if (callSession.acceptedAt || callSession.startedAt) {
+                    setActiveCallStartTime(callSession.acceptedAt || callSession.startedAt);
+                }
                 await handleRemoteAnswer(callSession);
                 await applyRemoteIceCandidates(conversationData);
             }
 
             if ((callSession.status === 'declined' || callSession.status === 'ended') && (activeCallSessionId === callSession.id || pendingIncomingCall?.id === callSession.id)) {
                 const endedByMe = callSession.endedBy === currentUserID;
+                const durationText = getEndedCallDurationText(callSession);
                 cleanupCallResources();
 
                 if (!endedByMe) {
-                    showToast(callSession.status === 'declined' ? 'A ligacao foi recusada' : 'A ligacao foi encerrada', 'info');
+                    if (callSession.status === 'declined') {
+                        showToast('A ligacao foi recusada', 'info');
+                    } else {
+                        showToast(durationText ? `A ligacao foi encerrada. Duracao: ${durationText}` : 'A ligacao foi encerrada', 'info');
+                    }
                 }
             }
         }
@@ -2604,6 +2799,16 @@
         }
 
         function getConversationListKey(conversationData, fallbackID) {
+            if (Array.isArray(conversationData?.participants) && conversationData.participants.length >= 2 && currentUserID) {
+                const otherParticipants = conversationData.participants
+                    .filter(id => id && id !== currentUserID)
+                    .sort();
+
+                if (otherParticipants.length > 0) {
+                    return `peer:${otherParticipants.join('_')}`;
+                }
+            }
+
             if (conversationData?.conversationKey) {
                 return conversationData.conversationKey;
             }
@@ -2761,19 +2966,48 @@
             }, true);
         }
 
-        async function deleteConversation(conversationID) {
-            const conversationRef = db.collection('conversations').doc(conversationID);
+        async function deleteConversation(conversationID, otherUserID = null) {
+            const conversationRefs = new Map();
+            const primaryRef = db.collection('conversations').doc(conversationID);
+            conversationRefs.set(primaryRef.id, primaryRef);
 
-            while (true) {
-                const snapshot = await conversationRef.collection('messages').limit(50).get();
-                if (snapshot.empty) break;
+            if (otherUserID && currentUserID) {
+                const conversationKey = getConversationKey(currentUserID, otherUserID);
+                conversationRefs.set(conversationKey, db.collection('conversations').doc(conversationKey));
 
-                const batch = db.batch();
-                snapshot.docs.forEach((doc) => batch.delete(doc.ref));
-                await batch.commit();
+                const conversationsRef = db.collection('conversations');
+                const sameKeySnapshot = await conversationsRef
+                    .where('conversationKey', '==', conversationKey)
+                    .get();
+
+                sameKeySnapshot.docs.forEach((doc) => {
+                    conversationRefs.set(doc.id, doc.ref);
+                });
+
+                const participantSnapshot = await conversationsRef
+                    .where('participants', 'array-contains', currentUserID)
+                    .get();
+
+                participantSnapshot.docs.forEach((doc) => {
+                    const participants = Array.isArray(doc.data()?.participants) ? doc.data().participants : [];
+                    if (participants.includes(otherUserID)) {
+                        conversationRefs.set(doc.id, doc.ref);
+                    }
+                });
             }
 
-            await conversationRef.delete();
+            for (const conversationRef of conversationRefs.values()) {
+                while (true) {
+                    const snapshot = await conversationRef.collection('messages').limit(50).get();
+                    if (snapshot.empty) break;
+
+                    const batch = db.batch();
+                    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+                    await batch.commit();
+                }
+
+                await conversationRef.delete();
+            }
         }
 
         async function clearConversationMessages(conversationID) {
@@ -3285,8 +3519,15 @@
                                 const existing = map.get(key);
                                 const existingTime = existing?.data().lastMessageTime?.toMillis?.() || 0;
                                 const currentTime = data.lastMessageTime?.toMillis?.() || 0;
+                                const currentIsCanonical = data?.conversationKey && doc.id === data.conversationKey;
+                                const existingData = existing?.data?.();
+                                const existingIsCanonical = existingData?.conversationKey && existing.id === existingData.conversationKey;
 
-                                if (!existing || currentTime >= existingTime) {
+                                if (
+                                    !existing ||
+                                    (currentIsCanonical && !existingIsCanonical) ||
+                                    (currentIsCanonical === existingIsCanonical && currentTime >= existingTime)
+                                ) {
                                     map.set(key, doc);
                                 }
 
@@ -3348,6 +3589,7 @@
 
                         for (const doc of sortedConversations) {
                             const convData = doc.data();
+                            const conversationID = convData.conversationKey || doc.id;
                             const otherUserID = convData.participants.find(id => id !== currentUserID);
                             const otherUserData = await db.collection('users')
                                 .where('userID', '==', otherUserID)
@@ -3358,16 +3600,16 @@
                                 const otherUser = otherUserData.docs[0].data();
                                 const convItem = document.createElement('div');
                                 convItem.className = 'conversation-item';
-                                convItem.dataset.conversationId = doc.id;
+                                convItem.dataset.conversationId = conversationID;
                                 convItem.innerHTML = `
                                     <div class="conversation-name">${otherUser.username}${isConversationPinned(convData) ? '<span class="conversation-pin"><i data-lucide="pin" style="width: 14px; height: 14px;"></i></span>' : ''}</div>
                                     <div class="conversation-id">ID: ${otherUserID}</div>
                                 `;
                                 convItem.addEventListener('click', () => {
-                                    selectConversation(doc.id, otherUserID, otherUser.username);
+                                    selectConversation(conversationID, otherUserID, otherUser.username);
                                 });
                                 attachConversationLongPressHandlers(convItem, {
-                                    conversationID: doc.id,
+                                    conversationID,
                                     otherUserID,
                                     otherUsername: otherUser.username,
                                     blockedBy: convData.blockedBy || [],
@@ -3375,7 +3617,7 @@
                                     ttlHours: convData.ttlHours || 24
                                 });
 
-                                if (currentConversationID === doc.id) {
+                                if (currentConversationID === conversationID) {
                                     convItem.classList.add('active');
                                 }
 
@@ -3400,8 +3642,8 @@
                 const conversationsRef = db.collection('conversations');
                 const { conversationKey, doc: existingConversation } = await getConversationByUsers(otherUserID);
 
-                let conversationID;
-                if (existingConversation) {
+                let conversationID = conversationKey;
+                if (existingConversation?.exists) {
                     await conversationsRef.doc(conversationKey).set({
                         participants: [currentUserID, otherUserID],
                         conversationKey: conversationKey,
@@ -3410,7 +3652,6 @@
                         lastMessageTime: existingConversation.data().lastMessageTime || new Date(),
                         ttlHours: existingConversation.data().ttlHours || 24
                     }, { merge: true });
-                    conversationID = existingConversation.id;
                 } else {
                     // Cria nova conversa fixa por par de usuários
                     await conversationsRef.doc(conversationKey).set({
@@ -3424,7 +3665,6 @@
                         pinnedBy: [],
                         typingBy: []
                     });
-                    conversationID = conversationKey;
                 }
 
                 selectConversation(conversationID, otherUserID, otherUsername);
@@ -4116,12 +4356,51 @@
         });
 
         // Botão enviar
-        document.getElementById('callButton').addEventListener('click', startPhoneCall);
+        document.getElementById('callButton').addEventListener('click', () => {
+            if (activeCallSessionId || pendingIncomingCall || activeCallPeer) {
+                setCallModalMinimized(false);
+                unlockRemoteCallAudio({ forceSpeaker: isCallSpeakerEnabled }).catch(() => {});
+                return;
+            }
+
+            startPhoneCall();
+        });
         document.getElementById('acceptCallButton').addEventListener('click', acceptIncomingCall);
         document.getElementById('declineCallButton').addEventListener('click', () => {
             endCurrentCall('declined').catch(() => {
                 cleanupCallResources();
             });
+        });
+        document.getElementById('speakerCallButton').addEventListener('click', async () => {
+            isCallSpeakerEnabled = !isCallSpeakerEnabled;
+            refreshCallControlLabels();
+
+            const unlocked = await unlockRemoteCallAudio({ forceSpeaker: isCallSpeakerEnabled });
+            if (!unlocked) {
+                showToast('Toque novamente se o celular bloquear o audio', 'info');
+                return;
+            }
+
+            showToast(isCallSpeakerEnabled ? 'Viva-voz ativado' : 'Saida de audio ajustada', 'success');
+        });
+        document.getElementById('muteCallButton').addEventListener('click', () => {
+            setCallMicMuted(!isCallMicMuted);
+            showToast(isCallMicMuted ? 'Microfone mutado' : 'Microfone ativado', 'info');
+        });
+        document.getElementById('minimizeCallButton').addEventListener('click', () => {
+            setCallModalMinimized(true);
+        });
+        document.getElementById('addParticipantButton').addEventListener('click', () => {
+            const target = prompt('ID da pessoa para adicionar na chamada:');
+            if (target === null) return;
+
+            const sanitizedTarget = target.trim();
+            if (!sanitizedTarget) {
+                showToast('Informe um ID valido para adicionar', 'info');
+                return;
+            }
+
+            showToast(`Convite para ${sanitizedTarget} ainda nao esta disponivel em chamada de grupo`, 'info');
         });
         document.getElementById('endCallButton').addEventListener('click', () => {
             endCurrentCall('ended').catch(() => {
@@ -4377,16 +4656,20 @@
         document.getElementById('deleteConversationButton').addEventListener('click', async () => {
             if (!selectedConversationContext) return;
 
-            const { conversationID, otherUsername } = selectedConversationContext;
+            const { conversationID, otherUsername, otherUserID } = selectedConversationContext;
             closeConversationActionModal();
 
             if (!confirm(`Apagar a conversa com ${otherUsername}?`)) return;
 
             try {
-                await deleteConversation(conversationID);
+                await deleteConversation(conversationID, otherUserID);
 
-                if (currentConversationID === conversationID) {
+                if (currentConversationID === conversationID || currentChatUserID === otherUserID) {
                     resetChatUI();
+                    currentConversationID = null;
+                    currentConversationKey = null;
+                    currentChatUserID = null;
+                    currentChatUser = null;
                 }
 
                 showToast('Conversa apagada', 'success');
